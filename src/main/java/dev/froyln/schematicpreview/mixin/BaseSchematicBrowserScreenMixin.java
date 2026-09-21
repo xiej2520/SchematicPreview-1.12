@@ -7,14 +7,13 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import fi.dy.masa.litematica.gui.BaseSchematicBrowserScreen;
-import fi.dy.masa.litematica.gui.util.SchematicBrowserIconProvider;
-import fi.dy.masa.malilib.gui.widget.button.ButtonActionListener;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetFactory;
-import fi.dy.masa.malilib.gui.widget.list.header.DirectoryNavigationWidget;
+import litematica.gui.BaseSchematicBrowserScreen;
+import litematica.gui.util.SchematicBrowserIconProvider;
+import malilib.gui.widget.button.GenericButton;
+import malilib.gui.widget.list.BaseFileBrowserWidget;
+import malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
+import malilib.gui.widget.list.entry.DataListEntryWidgetFactory;
+import malilib.gui.widget.list.header.DirectoryNavigationWidget;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.config.PreviewType;
@@ -22,6 +21,7 @@ import dev.froyln.schematicpreview.gui.BrowserWidgetAccessors;
 import dev.froyln.schematicpreview.gui.PreviewDirectoryEntryWidget;
 import dev.froyln.schematicpreview.gui.SchematicPreviewIcons;
 import dev.froyln.schematicpreview.gui.TileEntryWidgetFactory;
+import dev.froyln.schematicpreview.gui.PreviewTypeButtonAccess;
 import dev.froyln.schematicpreview.render.PreviewCache;
 
 /**
@@ -64,8 +64,7 @@ public abstract class BaseSchematicBrowserScreenMixin
             listWidget.refreshFilteredEntries();
             return true;
         });
-        button.setPosition(nav.getX() - BUTTON_SIZE - 2, nav.getY());
-        listWidget.addWidget(button);
+        ((PreviewTypeButtonAccess) nav).schematicpreview$setPreviewTypeButton(button);
     }
 
     @Unique

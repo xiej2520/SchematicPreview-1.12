@@ -3,7 +3,7 @@ package dev.froyln.schematicpreview.gui;
 import java.lang.reflect.Method;
 import javax.annotation.Nullable;
 
-import fi.dy.masa.malilib.gui.BaseScreen;
+import malilib.gui.BaseScreen;
 
 /**
  * malilib 0.54 resizes popups to the whole window unless {@code useWindowDimensions} is

@@ -1,12 +1,12 @@
 package dev.froyln.schematicpreview.config;
 
 import com.google.common.collect.ImmutableList;
-import fi.dy.masa.malilib.config.option.BooleanConfig;
-import fi.dy.masa.malilib.config.option.ConfigOption;
-import fi.dy.masa.malilib.config.option.DoubleConfig;
-import fi.dy.masa.malilib.config.option.HotkeyConfig;
-import fi.dy.masa.malilib.config.option.IntegerConfig;
-import fi.dy.masa.malilib.config.option.OptionListConfig;
+import malilib.config.option.BooleanConfig;
+import malilib.config.option.ConfigOption;
+import malilib.config.option.DoubleConfig;
+import malilib.config.option.HotkeyConfig;
+import malilib.config.option.IntegerConfig;
+import malilib.config.option.OptionListConfig;
 
 public class Configs
 {

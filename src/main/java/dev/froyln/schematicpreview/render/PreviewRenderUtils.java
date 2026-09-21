@@ -8,11 +8,11 @@ import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.shader.Framebuffer;
 
-import fi.dy.masa.malilib.gui.util.ScreenContext;
-import fi.dy.masa.malilib.render.ShapeRenderUtils;
-import fi.dy.masa.malilib.render.text.StyledTextLine;
-import fi.dy.masa.malilib.render.text.TextRenderer;
-import fi.dy.masa.malilib.util.StringUtils;
+import malilib.gui.util.ScreenContext;
+import malilib.render.ShapeRenderUtils;
+import malilib.render.text.StyledTextLine;
+import malilib.render.text.TextRenderer;
+import malilib.util.StringUtils;
 
 /** FBO-blit and placeholder helpers shared by {@code PreviewWidget} and {@code PreviewCache}. */
 public final class PreviewRenderUtils
@@ -57,11 +57,11 @@ public final class PreviewRenderUtils
 
     public static void renderPlaceholder(int x, int y, int width, int height, float z, String translationKey, ScreenContext ctx)
     {
-        ShapeRenderUtils.renderRectangle(x, y, z, width, height, 0x80000000);
+        ShapeRenderUtils.renderRectangle(x, y, z, width, height, 0x80000000, ctx);
         String text = StringUtils.translate(translationKey);
         TextRenderer textRenderer = TextRenderer.INSTANCE;
         int textX = x + Math.max(0, (width - textRenderer.getRenderWidth(text)) / 2);
         int textY = y + Math.max(0, (height - textRenderer.getFontHeight()) / 2);
-        textRenderer.renderLine(textX, textY, z + 1f, 0xFFFFFFFF, true, StyledTextLine.of(text), ctx);
+        textRenderer.renderLine(textX, textY, z + 1f, 0xFFFFFFFF, true, StyledTextLine.parseFirstLine(text), ctx);
     }
 }

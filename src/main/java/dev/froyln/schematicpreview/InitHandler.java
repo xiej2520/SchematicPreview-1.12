@@ -2,16 +2,16 @@ package dev.froyln.schematicpreview;
 
 import java.util.List;
 import com.google.common.collect.ImmutableList;
-import fi.dy.masa.malilib.config.JsonModConfig;
-import fi.dy.masa.malilib.config.category.BaseConfigOptionCategory;
-import fi.dy.masa.malilib.config.category.ConfigOptionCategory;
-import fi.dy.masa.malilib.event.InitializationHandler;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.input.ActionResult;
-import fi.dy.masa.malilib.input.Hotkey;
-import fi.dy.masa.malilib.input.HotkeyCategory;
-import fi.dy.masa.malilib.input.HotkeyProvider;
-import fi.dy.masa.malilib.registry.Registry;
+import malilib.config.JsonModConfig;
+import malilib.config.category.BaseConfigOptionCategory;
+import malilib.config.category.ConfigOptionCategory;
+import malilib.event.InitializationHandler;
+import malilib.gui.BaseScreen;
+import malilib.input.ActionResult;
+import malilib.input.Hotkey;
+import malilib.input.HotkeyCategory;
+import malilib.input.HotkeyProvider;
+import malilib.registry.Registry;
 import dev.froyln.schematicpreview.config.ConfigScreen;
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.data.DirectoryIconStore;
@@ -33,7 +33,7 @@ public class InitHandler implements InitializationHandler
                 JsonModConfig.createJsonModConfig(Reference.MOD_INFO, Configs.CURRENT_VERSION, categories, null));
 
         Registry.CONFIG_SCREEN.registerConfigScreenFactory(Reference.MOD_INFO, ConfigScreen::create);
-        Registry.CONFIG_TAB.registerConfigTabProvider(Reference.MOD_INFO, () -> ConfigScreen.CONFIG_TABS);
+        Registry.CONFIG_TAB.registerConfigTabSupplier(Reference.MOD_INFO, () -> ConfigScreen.CONFIG_TABS);
 
         Registry.HOTKEY_MANAGER.registerHotkeyProvider(new HotkeyProvider()
         {

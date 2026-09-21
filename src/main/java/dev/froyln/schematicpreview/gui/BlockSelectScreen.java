@@ -12,12 +12,12 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.NonNullList;
 
-import fi.dy.masa.malilib.gui.BaseListScreen;
-import fi.dy.masa.malilib.gui.widget.ItemStackWidget;
-import fi.dy.masa.malilib.gui.widget.list.DataListWidget;
-import fi.dy.masa.malilib.gui.widget.list.entry.BaseDataListEntryWidget;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetData;
-import fi.dy.masa.malilib.render.text.StyledTextLine;
+import malilib.gui.BaseListScreen;
+import malilib.gui.widget.ItemStackWidget;
+import malilib.gui.widget.list.DataListWidget;
+import malilib.gui.widget.list.entry.BaseDataListEntryWidget;
+import malilib.gui.widget.list.entry.DataListEntryWidgetData;
+import malilib.render.text.StyledTextLine;
 
 /**
  * Searchable block-variant picker for the material list Replace button: every placeable
@@ -83,7 +83,7 @@ public class BlockSelectScreen extends BaseListScreen<DataListWidget<ItemStack>>
 
             this.onPick = onPick;
             this.iconWidget = new ItemStackWidget(data);
-            this.setText(StyledTextLine.of(data.getDisplayName()));
+            this.setText(StyledTextLine.parseFirstLine(data.getDisplayName()));
             this.getTextOffset().setXOffset(22);
         }
 

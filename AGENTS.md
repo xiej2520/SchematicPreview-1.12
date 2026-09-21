@@ -1,4 +1,9 @@
-# SchematicPreview (LiteLoader 1.12.2)
+# SchematicPreview (Ornithe 1.12.2)
+
+> Port status: this repository has been moved from the historical LiteLoader/ForgeGradle
+> implementation to Fabric Loader + Ornithe Standard Libraries + Loom/Ploceus. The historical
+> LiteLoader notes below are retained as background only; use `README.md`, `docs/port-design.md`,
+> `build.gradle`, and `gradle.properties` for the active build and runtime configuration.
 
 Client-side Litematica addon for Minecraft 1.12.2 on LiteLoader. It re-implements, from
 scratch, the features of the Fabric mod

@@ -3,8 +3,8 @@ package dev.froyln.schematicpreview.gui;
 import java.nio.file.Path;
 import java.util.function.Predicate;
 
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget;
-import fi.dy.masa.malilib.gui.widget.list.header.DirectoryNavigationWidget;
+import malilib.gui.widget.list.BaseFileBrowserWidget;
+import malilib.gui.widget.list.header.DirectoryNavigationWidget;
 
 import dev.froyln.schematicpreview.mixin.BaseFileBrowserWidgetAccessor;
 import dev.froyln.schematicpreview.mixin.BaseListWidgetAccessor;

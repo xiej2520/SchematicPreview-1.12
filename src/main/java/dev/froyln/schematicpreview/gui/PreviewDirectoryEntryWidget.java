@@ -6,18 +6,18 @@ import javax.annotation.Nullable;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.icon.FileBrowserIconProvider;
-import fi.dy.masa.malilib.gui.util.ScreenContext;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntryType;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetData;
-import fi.dy.masa.malilib.gui.widget.list.entry.DirectoryEntryWidget;
-import fi.dy.masa.malilib.render.ItemRenderUtils;
-import fi.dy.masa.malilib.render.text.StyledTextLine;
-import fi.dy.masa.malilib.render.text.StyledTextUtils;
-import fi.dy.masa.malilib.util.data.LeftRight;
+import malilib.gui.BaseScreen;
+import malilib.gui.icon.FileBrowserIconProvider;
+import malilib.gui.util.ScreenContext;
+import malilib.gui.widget.list.BaseFileBrowserWidget;
+import malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
+import malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntryType;
+import malilib.gui.widget.list.entry.DataListEntryWidgetData;
+import malilib.gui.widget.list.entry.DirectoryEntryWidget;
+import malilib.render.ItemRenderUtils;
+import malilib.render.text.StyledTextLine;
+import malilib.render.text.StyledTextUtils;
+import malilib.util.data.LeftRight;
 
 import dev.froyln.schematicpreview.config.PreviewType;
 import dev.froyln.schematicpreview.data.DirectoryIconStore;
@@ -114,7 +114,7 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
 
         if (this.entryType == DirectoryEntryType.DIRECTORY)
         {
-            this.renderDirectoryVisual(x, y, z);
+            this.renderDirectoryVisual(x, y, z, ctx);
         }
         else if (this.showBigVisual)
         {
@@ -144,7 +144,7 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
         PreviewCache.renderSmallPreview(schematicPath, box[0], box[1], box[2], box[3], z + 0.5f);
     }
 
-    private void renderDirectoryVisual(int x, int y, float z)
+    private void renderDirectoryVisual(int x, int y, float z, ScreenContext ctx)
     {
         if (this.iconEntry == null)
         {
@@ -176,11 +176,11 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
             int scale = Math.max(1, Math.min(box[2], box[3]) / 20);
             int drawX = box[0] + (box[2] - 16 * scale) / 2;
             int drawY = box[1] + (box[3] - 16 * scale) / 2;
-            ItemRenderUtils.renderStackAt(stack, drawX, drawY, z + 0.6f, scale, this.mc);
+            ItemRenderUtils.renderStackAt(stack, drawX, drawY, z + 0.6f, scale, ctx);
         }
         else
         {
-            ItemRenderUtils.renderStackAt(stack, x + 2, y + (this.getHeight() - 16) / 2, z + 0.6f, 1f, this.mc);
+            ItemRenderUtils.renderStackAt(stack, x + 2, y + (this.getHeight() - 16) / 2, z + 0.6f, 1f, ctx);
         }
     }
 

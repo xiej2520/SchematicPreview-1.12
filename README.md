@@ -1,7 +1,7 @@
-# SchematicPreview for LiteLoader 1.12.2
+# SchematicPreview for Ornithe 1.12.2
 
 A [Litematica](https://github.com/maruohon/litematica) addon for Minecraft 1.12.2 /
-[LiteLoader](https://www.liteloader.com/) that brings the features of the Fabric mod
+[Ornithe](https://ornithemc.net/) that brings the features of the Fabric mod
 [DimasKama/SchematicPreview](https://github.com/DimasKama/SchematicPreview) to 1.12.2,
 re-implemented from scratch:
 
@@ -32,7 +32,7 @@ re-implemented from scratch:
 
 ## Usage
 
-- **Config screen:** `Right Shift + F8` (rebindable) or LiteLoader's mod panel. Tabs Generic /
+- **Config screen:** `Right Shift + F8` (rebindable) or MaLiLib's config screen. Tabs Generic /
   Menu / Preview / Hotkeys.
 - **Preview:** select a schematic in any Litematica browser. Drag = rotate, scroll = zoom,
   the two buttons in the preview's corner open **fullscreen** and toggle **freecam** (in
@@ -57,36 +57,32 @@ Design notes: `AGENTS.md`, `docs/port-design.md`.
 | Mod | Version |
 |-----|---------|
 | Minecraft | 1.12.2 |
-| LiteLoader | 1.12.2 |
-| MaLiLib (LiteLoader) | 0.53.0 or 0.54.0 |
-| Litematica (LiteLoader) | 0.31.4 |
+| Fabric Loader | 0.15.3 or newer |
+| Ornithe Standard Libraries | 0.16.3 |
+| MaLiLib (Ornithe) | 0.60.2-xiej.6 |
+| Litematica (Ornithe) | 0.40.1-xiej.1 |
 
-MaLiLib and Litematica for 1.12.2 are on [masa's download page](https://masa.dy.fi/mcmods/client_mods/?mcver=1.12.2),
-[Modrinth](https://modrinth.com/mod/litematica/version/0.31.4) and CurseForge.
+The supported MaLiLib and Litematica jars are built from the sibling Ornithe workspaces. The
+Gradle file uses those local artifacts by default.
 
 ## Building
 
-Toolchain is the same as Litematica 1.12.2: ForgeGradle 2.3 + Gradle 2.14.1 wrapper, **JDK 8**.
+This is a Fabric Loom/Ploceus build. Gradle 8.5+ and a modern JDK are used for the build; the
+compiled classes target Java 8 for Minecraft 1.12.2. The supplied flake provides Gradle and the
+graphics libraries used by the client.
 
 ```bash
-python3 tools/setup-build-deps.py    # once: fetches a pinned JDK 8 into .jdk-cache/ and
-                                      # litematica's .litemod (repacked) into libs/
-export JAVA_HOME=$PWD/.jdk-cache/jdk8u302-b08
-
-./gradlew build                  # first run is slow: downloads + deobfuscates MC 1.12.2
-                                  # → build/libs/schematicpreview-liteloader-1.12.2-<version>.litemod
-./gradlew runClient              # dev client, run dir ./minecraft
+nix develop
+./gradlew build                    # → build/libs/schematicpreview-ornithe-1.12.2-*.jar
+./gradlew runClient                # development client, run dir ./run
 ```
 
-**Use the pinned JDK, not your system's JDK 8** if it's a recent build (8u402+): ForgeGradle
-2.3's deobfuscator hits a real `java.util.zip.ZipException` on newer JDK 8 point releases.
-See `AGENTS.md` → Gotchas for why, and `tools/setup-build-deps.py` for the fix.
+The build expects these local sibling artifacts:
 
-Litematica LiteLoader isn't published to a Maven repo, hence the script — it downloads
-`litematica-liteloader-1.12.2-<version>.litemod` from
-[masa's mod page](https://masa.dy.fi/mcmods/litematica/) and repacks it. Alternative: build
-Litematica from source (`maruohon/litematica`, branch `liteloader_1.12.2`, commit `1db931a6`)
-and publish it to your local Maven.
+- `../malilib/build/libs/malilib-ornithe-1.12.2-0.60.2-xiej.6.jar`
+- `../litematica/build/devlibs/litematica-ornithe-1.12.2-0.40.1-xiej.1-dev.jar`
+
+Adjust `malilib_jar` and `litematica_jar` in `gradle.properties` if your local build names differ.
 
 ## License
 

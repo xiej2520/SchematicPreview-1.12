@@ -20,7 +20,7 @@ import javax.imageio.ImageIO;
 
 import net.minecraft.client.Minecraft;
 
-import fi.dy.masa.malilib.util.FileNameUtils;
+import malilib.util.FileNameUtils;
 
 /**
  * File-save and clipboard export for a captured preview image ({@link PreviewWidget#captureImage()}).

@@ -1,7 +1,7 @@
 package dev.froyln.schematicpreview.gui;
 
-import fi.dy.masa.malilib.gui.icon.BaseMultiIcon;
-import fi.dy.masa.malilib.util.data.Identifier;
+import malilib.gui.icon.BaseIcon;
+import malilib.util.data.Identifier;
 
 import dev.froyln.schematicpreview.Reference;
 
@@ -15,18 +15,18 @@ public final class SchematicPreviewIcons
     private static final Identifier TEXTURE = new Identifier(Reference.MOD_ID, "textures/gui/icons.png");
     private static final int SIZE = 12;
 
-    public static final BaseMultiIcon FULLSCREEN   = icon(0);
-    public static final BaseMultiIcon FREECAM      = icon(1);
-    public static final BaseMultiIcon SAVE         = icon(2);
-    public static final BaseMultiIcon COPY         = icon(3);
-    public static final BaseMultiIcon PREVIEW_TYPE = icon(4);
+    public static final BaseIcon FULLSCREEN   = icon(0);
+    public static final BaseIcon FREECAM      = icon(1);
+    public static final BaseIcon SAVE         = icon(2);
+    public static final BaseIcon COPY         = icon(3);
+    public static final BaseIcon PREVIEW_TYPE = icon(4);
 
     private SchematicPreviewIcons()
     {
     }
 
-    private static BaseMultiIcon icon(int row)
+    private static BaseIcon icon(int row)
     {
-        return new BaseMultiIcon(0, row * SIZE, SIZE, SIZE, SIZE, 0, 64, 64, TEXTURE);
+        return new BaseIcon(0, row * SIZE, SIZE, SIZE, SIZE, 0, 64, 64, TEXTURE);
     }
 }

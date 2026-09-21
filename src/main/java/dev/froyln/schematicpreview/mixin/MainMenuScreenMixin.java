@@ -10,11 +10,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.client.renderer.OpenGlHelper;
 
-import fi.dy.masa.litematica.data.DataManager;
-import fi.dy.masa.litematica.gui.MainMenuScreen;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.icon.DefaultIcons;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
+import litematica.data.DataManager;
+import litematica.gui.MainMenuScreen;
+import litematica.util.LitematicaDirectories;
+import malilib.gui.BaseScreen;
+import malilib.gui.icon.DefaultIcons;
+import malilib.gui.widget.button.GenericButton;
 
 import dev.froyln.schematicpreview.config.Configs;
 
@@ -43,7 +44,7 @@ public abstract class MainMenuScreenMixin extends BaseScreen
             this.schematicpreview_openFolderButton = GenericButton.create("schematicpreview.button.open_schematics_folder",
                     DefaultIcons.FILE_BROWSER_DIR);
             this.schematicpreview_openFolderButton.setActionListener(
-                    () -> OpenGlHelper.openFile(DataManager.getSchematicsBaseDirectory().toFile()));
+                    () -> OpenGlHelper.openFile(LitematicaDirectories.getSchematicsBaseDirectory().toFile()));
             this.schematicpreview_openFolderButton.setAutomaticWidth(false);
         }
 

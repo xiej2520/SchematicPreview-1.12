@@ -3,8 +3,8 @@ package dev.froyln.schematicpreview.mixin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-import fi.dy.masa.litematica.materials.MaterialListPlacement;
-import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
+import litematica.materials.MaterialListPlacement;
+import litematica.schematic.placement.SchematicPlacement;
 
 /**
  * Exposes the placement a {@code MaterialListPlacement} was built from, so the Replace button

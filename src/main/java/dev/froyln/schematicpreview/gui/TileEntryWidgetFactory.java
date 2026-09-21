@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget;
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
-import fi.dy.masa.malilib.gui.widget.list.ListEntryWidgetFactory;
-import fi.dy.masa.malilib.gui.widget.list.entry.BaseListEntryWidget;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetData;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetFactory;
+import malilib.gui.widget.list.BaseFileBrowserWidget;
+import malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
+import malilib.gui.widget.list.ListEntryWidgetFactory;
+import malilib.gui.widget.list.entry.BaseListEntryWidget;
+import malilib.gui.widget.list.entry.DataListEntryWidgetData;
+import malilib.gui.widget.list.entry.DataListEntryWidgetFactory;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.config.PreviewType;

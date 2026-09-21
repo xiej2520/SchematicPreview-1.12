@@ -4,62 +4,59 @@ import java.nio.file.Path;
 import javax.annotation.Nullable;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import fi.dy.masa.litematica.gui.util.SchematicInfoCache;
-import fi.dy.masa.litematica.gui.widget.SchematicInfoWidget;
-import fi.dy.masa.malilib.gui.widget.ContainerWidget;
-import fi.dy.masa.malilib.gui.widget.InteractableWidget;
+import litematica.gui.util.AbstractSchematicInfoCache.SchematicInfo;
+import litematica.gui.widget.AbstractSchematicInfoWidget;
+import malilib.gui.widget.ContainerWidget;
+import malilib.gui.widget.IconWidget;
+import malilib.gui.widget.LabelWidget;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.gui.PreviewWidget;
 import dev.froyln.schematicpreview.render.PreviewCache;
 
-/**
- * Replaces the vanilla 2D thumbnail in the schematic info panel with a live 3D
- * {@link PreviewWidget}. {@code extends ContainerWidget} is the usual trick to reach
- * inherited protected members without shadows.
- */
-@Mixin(SchematicInfoWidget.class)
+/** Adds the live 3D preview to Litematica's path-based schematic info panel. */
+@Mixin(AbstractSchematicInfoWidget.class)
 public abstract class SchematicInfoWidgetMixin extends ContainerWidget
 {
-    @Shadow(remap = false) @Nullable protected SchematicInfoCache.SchematicInfo currentInfo;
+    @Shadow(remap = false) @Nullable protected SchematicInfo currentInfo;
+    @Shadow(remap = false) @Final protected LabelWidget infoTextLabel;
+    @Shadow(remap = false) @Final protected LabelWidget descriptionLabel;
+    @Shadow(remap = false) @Final protected IconWidget iconWidget;
+    @Shadow(remap = false) protected boolean hasDescription;
 
-    @Unique private PreviewWidget schematicpreview_previewWidget;
+    @Unique @Nullable private Path schematicpreview$activePath;
+    @Unique @Nullable private PreviewWidget schematicpreview$previewWidget;
 
     private SchematicInfoWidgetMixin(int width, int height)
     {
         super(width, height);
     }
 
-    @Inject(method = "reCreateSubWidgets", at = @At("TAIL"), remap = false)
+    @Inject(method = "setActiveEntry", at = @At("HEAD"), remap = false)
+    private void schematicpreview$rememberPath(Object entry, CallbackInfo ci)
+    {
+        this.schematicpreview$activePath = entry instanceof Path ? (Path) entry : null;
+    }
+
+    @Inject(method = "reAddSubWidgets", at = @At("TAIL"), remap = false)
     private void schematicpreview$addPreview(CallbackInfo ci)
     {
-        if (this.schematicpreview_previewWidget != null)
-        {
-            this.schematicpreview_previewWidget.close();
-            this.schematicpreview_previewWidget = null;
-        }
+        this.schematicpreview$closePreview();
 
-        if (Configs.Generic.ENABLED.getBooleanValue() == false || this.currentInfo == null)
+        if (Configs.Generic.ENABLED.getBooleanValue() == false ||
+            this.currentInfo == null || this.schematicpreview$activePath == null)
         {
             return;
         }
 
-        Path file = this.currentInfo.schematic.getFile();
-
-        if (file == null || this.subWidgets.isEmpty())
-        {
-            return;
-        }
-
-        InteractableWidget last = this.subWidgets.get(this.subWidgets.size() - 1);
-        int x = this.getX() + 4;
-        int y = last.getBottom() + 4;
+        int y = Math.max(this.infoTextLabel.getBottom(), this.hasDescription ? this.descriptionLabel.getBottom() : 0) + 4;
         int width = this.getWidth() - 8;
         int height = this.getBottom() - y - 4;
 
@@ -68,19 +65,46 @@ public abstract class SchematicInfoWidgetMixin extends ContainerWidget
             return;
         }
 
-        this.schematicpreview_previewWidget = new PreviewWidget(x, y, width, height, file);
-        this.addWidget(this.schematicpreview_previewWidget);
+        // The live preview replaces the vanilla thumbnail in this panel. Leaving both active
+        // makes the thumbnail overlap the preview because the parent positions it at the bottom.
+        this.removeWidget(this.iconWidget);
+        this.schematicpreview$previewWidget = new PreviewWidget(this.getX() + 4, y, width, height,
+                                                                this.schematicpreview$activePath);
+        this.addWidget(this.schematicpreview$previewWidget);
+    }
+
+    @Inject(method = "updateSubWidgetPositions", at = @At("TAIL"), remap = false)
+    private void schematicpreview$updatePreviewGeometry(CallbackInfo ci)
+    {
+        if (this.schematicpreview$previewWidget == null || this.currentInfo == null)
+        {
+            return;
+        }
+
+        int y = Math.max(this.infoTextLabel.getBottom(), this.hasDescription ? this.descriptionLabel.getBottom() : 0) + 4;
+        int width = this.getWidth() - 8;
+        int height = this.getBottom() - y - 4;
+
+        if (width > 0 && height > 0)
+        {
+            this.schematicpreview$previewWidget.updatePreviewGeometry(this.getX() + 4, y, width, height);
+        }
     }
 
     @Inject(method = "clearCache", at = @At("TAIL"), remap = false)
     private void schematicpreview$clearCache(CallbackInfo ci)
     {
-        if (this.schematicpreview_previewWidget != null)
-        {
-            this.schematicpreview_previewWidget.close();
-            this.schematicpreview_previewWidget = null;
-        }
-
+        this.schematicpreview$closePreview();
         PreviewCache.close();
+    }
+
+    @Unique
+    private void schematicpreview$closePreview()
+    {
+        if (this.schematicpreview$previewWidget != null)
+        {
+            this.schematicpreview$previewWidget.close();
+            this.schematicpreview$previewWidget = null;
+        }
     }
 }

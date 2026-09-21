@@ -1,5 +1,0 @@
-{
-	"name": "schematicpreview",
-	"mcversion": "1.12.2",
-	"mixinConfigs": [ "mixins.schematicpreview.json" ]
-}

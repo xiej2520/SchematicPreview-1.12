@@ -1,5 +1,6 @@
 package dev.froyln.schematicpreview.mixin;
 
+import java.nio.file.Path;
 import javax.annotation.Nullable;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -10,15 +11,17 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import fi.dy.masa.litematica.gui.MaterialListScreen;
-import fi.dy.masa.litematica.materials.MaterialListBase;
-import fi.dy.masa.litematica.materials.MaterialListEntry;
-import fi.dy.masa.litematica.materials.MaterialListPlacement;
-import fi.dy.masa.litematica.materials.MaterialListSchematic;
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.gui.widget.list.DataListWidget;
+import litematica.gui.MaterialListScreen;
+import litematica.materials.MaterialListBase;
+import litematica.materials.MaterialListEntry;
+import litematica.materials.MaterialListPlacement;
+import litematica.materials.MaterialListSchematic;
+import litematica.schematic.Schematic;
+import litematica.schematic.placement.SchematicPlacement;
+import litematica.data.DataManager;
+import malilib.gui.BaseScreen;
+import malilib.gui.widget.button.GenericButton;
+import malilib.gui.widget.list.DataListWidget;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.gui.ReplaceMaterialListEntryWidget;
@@ -55,9 +58,10 @@ public abstract class MaterialListScreenMixin extends BaseScreen
     @Inject(method = "reAddActiveWidgets", at = @At("TAIL"), remap = false)
     private void schematicpreview$addSaveButtons(CallbackInfo ci)
     {
-        ISchematic schematic = this.schematicpreview$savableSchematic();
+        Schematic schematic = this.schematicpreview$savableSchematic();
+        Path file = this.schematicpreview$schematicFile();
 
-        if (schematic == null)
+        if (schematic == null || file == null)
         {
             return;
         }
@@ -65,9 +69,9 @@ public abstract class MaterialListScreenMixin extends BaseScreen
         if (this.schematicpreview_saveButton == null)
         {
             this.schematicpreview_saveButton = GenericButton.create(18, "schematicpreview.gui.save_schematic",
-                    () -> SchematicSaver.save(this.schematicpreview$savableSchematic()));
+                    () -> SchematicSaver.save(this.schematicpreview$savableSchematic(), this.schematicpreview$schematicFile()));
             this.schematicpreview_saveAsButton = GenericButton.create(18, "schematicpreview.gui.save_schematic_as",
-                    () -> SchematicSaver.saveAs(this.schematicpreview$savableSchematic()));
+                    () -> SchematicSaver.saveAs(this.schematicpreview$savableSchematic(), this.schematicpreview$schematicFile()));
         }
 
         this.addWidget(this.schematicpreview_saveButton);
@@ -92,15 +96,44 @@ public abstract class MaterialListScreenMixin extends BaseScreen
      */
     @Unique
     @Nullable
-    private ISchematic schematicpreview$savableSchematic()
+    private Schematic schematicpreview$savableSchematic()
     {
         if (Configs.Generic.ENABLED.getBooleanValue() == false || (this.materialList instanceof MaterialListSchematic) == false)
         {
             return null;
         }
 
-        ISchematic schematic = MaterialListAccessors.getSchematic((MaterialListSchematic) this.materialList);
+        Schematic schematic = MaterialListAccessors.getSchematic((MaterialListSchematic) this.materialList);
 
-        return schematic != null && schematic.getFile() != null ? schematic : null;
+        return schematic;
+    }
+
+    @Unique
+    @Nullable
+    private Path schematicpreview$schematicFile()
+    {
+        Schematic schematic = this.schematicpreview$savableSchematic();
+
+        if (schematic == null)
+        {
+            return null;
+        }
+
+        Path remembered = MaterialListAccessors.getSchematicFile(schematic);
+
+        if (remembered != null)
+        {
+            return remembered;
+        }
+
+        for (SchematicPlacement placement : DataManager.getSchematicPlacementManager().getAllSchematicPlacements())
+        {
+            if (placement.getSchematic() == schematic)
+            {
+                return placement.getSchematicFile();
+            }
+        }
+
+        return null;
     }
 }

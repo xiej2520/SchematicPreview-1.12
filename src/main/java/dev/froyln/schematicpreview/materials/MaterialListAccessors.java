@@ -1,10 +1,13 @@
 package dev.froyln.schematicpreview.materials;
 
+import java.nio.file.Path;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import com.google.common.collect.ImmutableList;
 
-import fi.dy.masa.litematica.materials.MaterialListPlacement;
-import fi.dy.masa.litematica.materials.MaterialListSchematic;
-import fi.dy.masa.litematica.schematic.ISchematic;
+import litematica.materials.MaterialListPlacement;
+import litematica.materials.MaterialListSchematic;
+import litematica.schematic.Schematic;
 
 import dev.froyln.schematicpreview.mixin.MaterialListPlacementAccessor;
 import dev.froyln.schematicpreview.mixin.MaterialListSchematicAccessor;
@@ -16,11 +19,13 @@ import dev.froyln.schematicpreview.mixin.MaterialListSchematicAccessor;
  */
 public final class MaterialListAccessors
 {
+    private static final Map<Schematic, Path> SCHEMATIC_FILES = new IdentityHashMap<>();
+
     private MaterialListAccessors()
     {
     }
 
-    public static ISchematic getSchematic(MaterialListSchematic materialList)
+    public static Schematic getSchematic(MaterialListSchematic materialList)
     {
         return ((MaterialListSchematicAccessor) materialList).schematicpreview$getSchematic();
     }
@@ -30,8 +35,21 @@ public final class MaterialListAccessors
         return ((MaterialListSchematicAccessor) materialList).schematicpreview$getRegions();
     }
 
-    public static ISchematic getSchematic(MaterialListPlacement materialList)
+    public static Schematic getSchematic(MaterialListPlacement materialList)
     {
         return ((MaterialListPlacementAccessor) materialList).schematicpreview$getPlacement().getSchematic();
+    }
+
+    public static void rememberSchematicFile(Schematic schematic, Path file)
+    {
+        if (schematic != null && file != null)
+        {
+            SCHEMATIC_FILES.put(schematic, file);
+        }
+    }
+
+    public static Path getSchematicFile(Schematic schematic)
+    {
+        return SCHEMATIC_FILES.get(schematic);
     }
 }

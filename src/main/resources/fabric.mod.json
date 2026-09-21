@@ -1,0 +1,29 @@
+{
+    "schemaVersion": 1,
+    "id": "schematicpreview",
+    "name": "SchematicPreview",
+    "version": "${mod_version}",
+    "description": "Schematic previews and browser utilities for Litematica",
+    "license": "LGPLv3",
+    "authors": [ "froyln" ],
+    "environment": "client",
+    "entrypoints": {
+        "client-init": [
+            "dev.froyln.schematicpreview.SchematicPreview"
+        ]
+    },
+    "mixins": [
+        {
+            "config": "mixins.schematicpreview.json",
+            "environment": "client"
+        }
+    ],
+    "depends": {
+        "minecraft": "1.12.x",
+        "malilib": "0.60.2-xiej.6",
+        "litematica": "0.40.1-xiej.1",
+        "osl-entrypoints": "*",
+        "osl-lifecycle-events": "0.5.6+mc13w36a-09051446-mc1.13",
+        "osl-resource-loader": "*"
+    }
+}
