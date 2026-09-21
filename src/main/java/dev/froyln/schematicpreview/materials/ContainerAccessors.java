@@ -1,12 +1,12 @@
 package dev.froyln.schematicpreview.materials;
 
-import fi.dy.masa.litematica.schematic.container.ILitematicaBlockStateContainer;
-import fi.dy.masa.litematica.schematic.container.LitematicaBlockStateContainerFull;
+import litematica.schematic.container.ArrayBlockContainer;
+import litematica.schematic.container.BlockContainer;
 
-import dev.froyln.schematicpreview.mixin.LitematicaBlockStateContainerFullAccessor;
+import dev.froyln.schematicpreview.mixin.ArrayBlockContainerAccessor;
 
 /**
- * Plain call site for {@code LitematicaBlockStateContainerFullAccessor}. Must live outside the
+ * Plain call site for {@code ArrayBlockContainerAccessor}. Must live outside the
  * mixin package and outside any mixin's injected method - both cases fail at runtime, not at
  * compile time. See AGENTS.md Gotchas.
  */
@@ -29,11 +29,11 @@ public final class ContainerAccessors
      * {@code ArrayIndexOutOfBoundsException} on load/place. Forcing the real-resize branch keeps
      * the palette size and {@code bits} in the relationship every reader assumes.
      */
-    public static void forceRealResizeOnOverflow(ILitematicaBlockStateContainer container)
+    public static void forceRealResizeOnOverflow(BlockContainer container)
     {
-        if (container instanceof LitematicaBlockStateContainerFull)
+        if (container instanceof ArrayBlockContainer)
         {
-            ((LitematicaBlockStateContainerFullAccessor) container).schematicpreview$setCheckForFreedIds(false);
+            ((ArrayBlockContainerAccessor) container).schematicpreview$setCheckForFreedIds(false);
         }
     }
 }

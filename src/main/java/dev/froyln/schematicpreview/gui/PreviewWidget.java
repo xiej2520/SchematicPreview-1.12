@@ -13,16 +13,17 @@ import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.util.ScreenContext;
-import fi.dy.masa.malilib.gui.widget.InteractableWidget;
-import fi.dy.masa.malilib.render.ShapeRenderUtils;
+import malilib.gui.BaseScreen;
+import malilib.gui.util.ScreenContext;
+import malilib.gui.widget.InteractableWidget;
+import malilib.overlay.message.MessageDispatcher;
+import malilib.render.ShapeRenderUtils;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.render.PreviewCache;
 import dev.froyln.schematicpreview.render.PreviewRenderer;
 import dev.froyln.schematicpreview.render.PreviewRenderUtils;
-import fi.dy.masa.litematica.schematic.ISchematic;
+import litematica.schematic.Schematic;
 
 /**
  * Live 3D render of a schematic, tessellated and cached by {@link PreviewCache}. Each instance
@@ -36,6 +37,7 @@ public class PreviewWidget extends InteractableWidget
 
     private final Path path;
     @Nullable private Framebuffer fbo;
+    private int fboScale;
 
     private boolean cameraInitialized;
     private float yRot;
@@ -63,6 +65,11 @@ public class PreviewWidget extends InteractableWidget
     {
         super(x, y, width, height);
 
+        // InteractableWidget only dispatches these callbacks for widgets that
+        // explicitly opt into the corresponding input categories.
+        this.canReceiveMouseClicks = true;
+        this.canReceiveMouseMoves = true;
+        this.canReceiveMouseScrolls = true;
         this.path = path;
     }
 
@@ -76,6 +83,22 @@ public class PreviewWidget extends InteractableWidget
         int x = this.getFullscreenButtonX();
         int y = this.getY() + 2;
         return mouseX >= x && mouseX < x + BUTTON_SIZE && mouseY >= y && mouseY < y + BUTTON_SIZE;
+    }
+
+    private boolean isOverCopyButton(int mouseX, int mouseY)
+    {
+        int x = this.getCopyButtonX();
+        int y = this.getY() + 2;
+        return this.getWidth() > 36 && mouseX >= x && mouseX < x + BUTTON_SIZE &&
+               mouseY >= y && mouseY < y + BUTTON_SIZE;
+    }
+
+    private boolean isOverSaveButton(int mouseX, int mouseY)
+    {
+        int x = this.getSaveButtonX();
+        int y = this.getY() + 2;
+        return this.getWidth() > 54 && mouseX >= x && mouseX < x + BUTTON_SIZE &&
+               mouseY >= y && mouseY < y + BUTTON_SIZE;
     }
 
     private boolean isOverFreecamButton(int mouseX, int mouseY)
@@ -92,12 +115,39 @@ public class PreviewWidget extends InteractableWidget
 
     private int getFreecamButtonX()
     {
-        return this.getFullscreenButtonX() - 2 - BUTTON_SIZE;
+        return this.getButtonX(1);
+    }
+
+    private int getCopyButtonX()
+    {
+        return this.getButtonX(2);
+    }
+
+    private int getSaveButtonX()
+    {
+        return this.getButtonX(3);
+    }
+
+    private int getButtonX(int indexFromRight)
+    {
+        return this.getRight() - 2 - BUTTON_SIZE - indexFromRight * (BUTTON_SIZE + 2);
     }
 
     @Override
     protected boolean onMouseClicked(int mouseX, int mouseY, int mouseButton)
     {
+        if (mouseButton == 0 && this.isOverSaveButton(mouseX, mouseY))
+        {
+            this.onSave();
+            return true;
+        }
+
+        if (mouseButton == 0 && this.isOverCopyButton(mouseX, mouseY))
+        {
+            this.onCopy();
+            return true;
+        }
+
         if (mouseButton == 0 && this.isOverFullscreenButton(mouseX, mouseY))
         {
             this.openFullscreen();
@@ -169,7 +219,7 @@ public class PreviewWidget extends InteractableWidget
     }
 
     @Override
-    protected boolean onMouseScrolled(int mouseX, int mouseY, double mouseWheelDelta)
+    protected boolean onMouseScrolled(int mouseX, int mouseY, double mouseWheelDelta, double mouseWheelDeltaVertical)
     {
         double factor = mouseWheelDelta < 0 ? 1.1 : (1.0 / 1.1);
         this.distance = MathHelper.clamp(this.distance * factor, MIN_DISTANCE, this.maxDistance);
@@ -189,7 +239,7 @@ public class PreviewWidget extends InteractableWidget
             return;
         }
 
-        CompletableFuture<ISchematic> future = PreviewCache.getSchematic(this.path);
+        CompletableFuture<Schematic> future = PreviewCache.getSchematic(this.path);
 
         if (future.isDone() == false)
         {
@@ -197,7 +247,7 @@ public class PreviewWidget extends InteractableWidget
             return;
         }
 
-        ISchematic schematic = future.getNow(null);
+        Schematic schematic = future.getNow(null);
 
         if (schematic == null)
         {
@@ -228,6 +278,17 @@ public class PreviewWidget extends InteractableWidget
         }
 
         renderer.tick();
+
+        // The renderer builds the VBOs incrementally.  Until the upload is complete the FBO
+        // contains only its clear color; showing that as a finished preview looks like a
+        // window-size/render failure, especially for larger schematics.
+        if (renderer.isTessellationDone() == false)
+        {
+            PreviewRenderUtils.renderPlaceholder(x, y, width, height, z, "schematicpreview.label.preview.loading", ctx);
+            this.renderOverlayButtons(x, y, ctx);
+            this.serviceCaptureRequest(renderer);
+            return;
+        }
 
         this.drawSceneToFbo(width, height, renderer);
         PreviewRenderUtils.blitFramebuffer(this.fbo, x, y, width, height, z);
@@ -268,7 +329,8 @@ public class PreviewWidget extends InteractableWidget
         int texWidth = Math.max(1, width * scale);
         int texHeight = Math.max(1, height * scale);
 
-        if (this.fbo == null || this.fbo.framebufferWidth != texWidth || this.fbo.framebufferHeight != texHeight)
+        if (this.fbo == null || this.fboScale != scale ||
+            this.fbo.framebufferWidth != texWidth || this.fbo.framebufferHeight != texHeight)
         {
             if (this.fbo != null)
             {
@@ -277,6 +339,7 @@ public class PreviewWidget extends InteractableWidget
 
             this.fbo = new Framebuffer(texWidth, texHeight, true);
             this.fbo.setFramebufferFilter(GL11.GL_NEAREST);
+            this.fboScale = scale;
         }
 
         this.fbo.bindFramebuffer(true);
@@ -290,12 +353,71 @@ public class PreviewWidget extends InteractableWidget
     private void renderOverlayButtons(int x, int y, ScreenContext ctx)
     {
         int barY = this.getY() + 2;
-        int freecamColor = this.freecam ? 0xFF3070FF : 0x80000000;
+        this.renderOverlayButton(this.getFullscreenButtonX(), barY, SchematicPreviewIcons.FULLSCREEN,
+                this.isOverFullscreenButton(ctx.mouseX, ctx.mouseY), ctx);
+        this.renderOverlayButton(this.getFreecamButtonX(), barY, SchematicPreviewIcons.FREECAM,
+                this.freecam || this.isOverFreecamButton(ctx.mouseX, ctx.mouseY), ctx);
 
-        ShapeRenderUtils.renderRectangle(this.getFreecamButtonX(), barY, this.getZ() + 1f, BUTTON_SIZE, BUTTON_SIZE, freecamColor);
-        ShapeRenderUtils.renderRectangle(this.getFullscreenButtonX(), barY, this.getZ() + 1f, BUTTON_SIZE, BUTTON_SIZE, 0x80000000);
-        SchematicPreviewIcons.FREECAM.renderAt(this.getFreecamButtonX(), barY, this.getZ() + 2f, true, this.isOverFreecamButton(ctx.mouseX, ctx.mouseY));
-        SchematicPreviewIcons.FULLSCREEN.renderAt(this.getFullscreenButtonX(), barY, this.getZ() + 2f, true, this.isOverFullscreenButton(ctx.mouseX, ctx.mouseY));
+        if (this.getWidth() > 36)
+        {
+            this.renderOverlayButton(this.getCopyButtonX(), barY, SchematicPreviewIcons.COPY,
+                    this.isOverCopyButton(ctx.mouseX, ctx.mouseY), ctx);
+        }
+
+        if (this.getWidth() > 54)
+        {
+            this.renderOverlayButton(this.getSaveButtonX(), barY, SchematicPreviewIcons.SAVE,
+                    this.isOverSaveButton(ctx.mouseX, ctx.mouseY), ctx);
+        }
+    }
+
+    private void renderOverlayButton(int x, int y, malilib.gui.icon.BaseIcon icon,
+                                     boolean highlighted, ScreenContext ctx)
+    {
+        int color = highlighted ? 0xFF3070FF : 0x80000000;
+        int variant = highlighted ? 2 : 1;
+        ShapeRenderUtils.renderRectangle(x, y, this.getZ() + 1f, BUTTON_SIZE, BUTTON_SIZE, color, ctx);
+        icon.renderAt(x, y, this.getZ() + 2f, variant, ctx);
+    }
+
+    private void onSave()
+    {
+        this.requestCapture(image -> {
+            if (image == null)
+            {
+                MessageDispatcher.warning().translate("schematicpreview.message.preview_not_ready");
+                return;
+            }
+
+            java.io.File file = ScreenshotUtil.save(image, this.path);
+
+            if (file != null)
+            {
+                MessageDispatcher.success().translate("schematicpreview.message.screenshot_saved", file.getName());
+            }
+            else
+            {
+                MessageDispatcher.error().translate("schematicpreview.message.screenshot_failed");
+            }
+        });
+    }
+
+    private void onCopy()
+    {
+        this.requestCapture(image -> {
+            if (image == null)
+            {
+                MessageDispatcher.warning().translate("schematicpreview.message.preview_not_ready");
+            }
+            else if (ScreenshotUtil.copyToClipboard(image))
+            {
+                MessageDispatcher.success().translate("schematicpreview.message.image_copied");
+            }
+            else
+            {
+                MessageDispatcher.error().translate("schematicpreview.message.screenshot_failed");
+            }
+        });
     }
 
     /**
@@ -320,6 +442,32 @@ public class PreviewWidget extends InteractableWidget
         {
             this.fbo.deleteFramebuffer();
             this.fbo = null;
+        }
+
+        this.fboScale = 0;
+    }
+
+    /**
+     * Keeps the preview's camera and framebuffer in sync when its parent panel is resized.
+     * The default distance depends on the widget aspect ratio, so retaining the old camera
+     * after a large-window resize can leave the model outside the narrow side-panel frustum.
+     */
+    public void updatePreviewGeometry(int x, int y, int width, int height)
+    {
+        boolean sizeChanged = this.getWidth() != width || this.getHeight() != height;
+        this.setPositionAndSize(x, y, width, height);
+
+        if (sizeChanged)
+        {
+            this.cameraInitialized = false;
+
+            if (this.fbo != null)
+            {
+                this.fbo.deleteFramebuffer();
+                this.fbo = null;
+            }
+
+            this.fboScale = 0;
         }
     }
 }

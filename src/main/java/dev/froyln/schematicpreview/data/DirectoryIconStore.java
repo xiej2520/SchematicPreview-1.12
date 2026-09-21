@@ -1,6 +1,8 @@
 package dev.froyln.schematicpreview.data;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -10,21 +12,25 @@ import com.google.gson.JsonObject;
 
 import net.minecraft.item.Item;
 
-import fi.dy.masa.malilib.config.util.ConfigUtils;
-import fi.dy.masa.malilib.util.data.json.JsonUtils;
+import malilib.config.util.ConfigUtils;
+import malilib.util.data.json.JsonUtils;
 
 import dev.froyln.schematicpreview.Reference;
+import litematica.util.LitematicaDirectories;
 
 /**
- * Per-directory custom icons, keyed by absolute path with {@code /} separators, persisted to
- * {@code config/schematicpreview_icons.json}. Unknown item ids are dropped on load; the file
- * is rewritten only after a user change.
+ * Per-directory custom icons, persisted to {@code config/schematicpreview_icons.json}. Keys use
+ * {@code /} separators and are relative to Litematica's schematics base directory ({@code .} for
+ * the base itself) when the directory is inside it, absolute otherwise. Unknown item ids are
+ * dropped on load; the file is rewritten after a user change or when old absolute keys were
+ * migrated to relative ones (on first use).
  */
 public final class DirectoryIconStore
 {
     private static final String FILE_NAME = Reference.MOD_ID + "_icons.json";
 
     private static final Map<String, Entry> ICONS = new HashMap<>();
+    private static boolean migrationDone;
 
     private DirectoryIconStore()
     {
@@ -33,6 +39,7 @@ public final class DirectoryIconStore
     public static void load()
     {
         ICONS.clear();
+        migrationDone = false;
 
         JsonElement root = JsonUtils.parseJsonFile(getFile());
 
@@ -65,6 +72,87 @@ public final class DirectoryIconStore
 
             IconPosition position = IconPosition.fromJsonName(JsonUtils.getStringOrDefault(obj, "pos", IconPosition.DEFAULT.jsonName));
             ICONS.put(e.getKey(), new Entry(itemId, position));
+        }
+    }
+
+    /**
+     * Rewrites old absolute keys inside the schematics base directory as relative keys. Runs on
+     * first use rather than in {@link #load()}: the base directory comes from Litematica's
+     * config, which may not be loaded yet during mod init.
+     */
+    private static void migrateAbsoluteKeys()
+    {
+        if (migrationDone)
+        {
+            return;
+        }
+
+        migrationDone = true;
+        Path base = getBaseDirectory();
+
+        if (base == null)
+        {
+            return;
+        }
+
+        boolean migrated = false;
+
+        for (Map.Entry<String, Entry> e : new HashMap<>(ICONS).entrySet())
+        {
+            String relativeKey = migrateKey(e.getKey(), base);
+
+            if (relativeKey != null)
+            {
+                ICONS.remove(e.getKey());
+                // An already relative entry for the same directory wins over a stale absolute one.
+                ICONS.putIfAbsent(relativeKey, e.getValue());
+                migrated = true;
+            }
+        }
+
+        if (migrated)
+        {
+            save();
+        }
+    }
+
+    /** The relative key for an old absolute key inside {@code base}, or null if it needs no migration. */
+    @Nullable
+    private static String migrateKey(String key, Path base)
+    {
+        try
+        {
+            Path path = Paths.get(key);
+            return path.isAbsolute() ? relativeKey(path.normalize(), base) : null;
+        }
+        catch (InvalidPathException e)
+        {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static String relativeKey(Path directory, Path base)
+    {
+        if (directory.startsWith(base) == false)
+        {
+            return null;
+        }
+
+        String relative = base.relativize(directory).toString().replace('\\', '/');
+        return relative.isEmpty() ? "." : relative;
+    }
+
+    @Nullable
+    private static Path getBaseDirectory()
+    {
+        try
+        {
+            return LitematicaDirectories.getSchematicsBaseDirectory().toAbsolutePath().normalize();
+        }
+        catch (Throwable t)
+        {
+            return null;
         }
     }
 
@@ -117,7 +205,13 @@ public final class DirectoryIconStore
 
     private static String keyFor(Path directory)
     {
-        return directory.toAbsolutePath().normalize().toString().replace('\\', '/');
+        migrateAbsoluteKeys();
+
+        Path absolute = directory.toAbsolutePath().normalize();
+        Path base = getBaseDirectory();
+        String relative = base != null ? relativeKey(absolute, base) : null;
+
+        return relative != null ? relative : absolute.toString().replace('\\', '/');
     }
 
     private static Path getFile()

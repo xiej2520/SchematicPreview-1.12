@@ -1,4 +1,9 @@
-# SchematicPreview (LiteLoader 1.12.2)
+# SchematicPreview (Ornithe 1.12.2)
+
+> Port status: this repository has been moved from the historical LiteLoader/ForgeGradle
+> implementation to Fabric Loader + Ornithe Standard Libraries + Loom/Ploceus. The historical
+> LiteLoader notes below are retained as background only; use `README.md`, `docs/port-design.md`,
+> `build.gradle`, and `gradle.properties` for the active build and runtime configuration.
 
 Client-side Litematica addon for Minecraft 1.12.2 on LiteLoader. It re-implements, from
 scratch, the features of the Fabric mod
@@ -18,48 +23,41 @@ is for reading only.**
 
 ## Tech stack
 
-- **Language:** Java 8 (`sourceCompatibility = 1.8`; no records, `var`, switch patterns,
-  `List.of`, `Path.of` — the ForgeGradle 2.3 toolchain compiles with JDK 8).
-- **Framework / runtime:** Minecraft 1.12.2 + LiteLoader 1.12.2 (`com.mumfrey.liteloader.LiteMod`),
-  MCP mappings `stable_39`, LWJGL 2, SpongePowered Mixin 0.7.x (bundled with LiteLoader).
-- **Package manager:** Gradle 2.14.1 wrapper + ForgeGradle 2.3-SNAPSHOT (`net.minecraftforge.gradle.liteloader`
-  plugin) + MixinGradle 0.6-SNAPSHOT. Same setup Litematica/MaLiLib 1.12.2 use.
-- **Key dependencies:**
-  - `malilib-liteloader-1.12.2` **0.53.0** (`fi.dy.masa.malilib.*`, from `https://masa.dy.fi/maven`,
-    `:deobf` classifier). Provides config system, hotkeys, the widget/screen framework and
-    the file browser the addon extends.
-  - `litematica-liteloader-1.12.2` **0.31.4** (`fi.dy.masa.litematica.*`). Not on any Maven —
-    the `.litemod` goes in `libs/` (flatDir), remapped notch→MCP by the `remapLitematica` Gradle
-    task (see Gotchas) and put on the compile classpath as a plain jar — **not** `deobfCompile`,
-    which doesn't work for this dependency. Or build it from source at `maruohon/litematica`
-    commit `1db931a6` and `publishToMavenLocal`. This is the post-rewrite Litematica
-    (`BaseSchematicBrowserScreen`, `SchematicInfoWidget`, `MaterialListEntryWidget`), NOT the
-    2020 `GuiSchematicBrowserBase`/`WidgetSchematicBrowser` API of older builds.
-  - `SpecialSource` **1.8.3:shaded** (`net.md-5:SpecialSource`, Maven Central, build-time only).
-    The notch→MCP remapping tool `remapLitematica` runs to fix the litematica dependency above;
-    the same tool ForgeGradle uses internally for the vanilla jar. Never shipped in the litemod.
+- **Language:** Java 8 (`options.release = 8`; no records, `var`, switch patterns, `List.of`,
+  `Path.of`).
+- **Framework / runtime:** Minecraft 1.12.2 + Fabric Loader + Ornithe Standard Libraries
+  (entrypoints, lifecycle events, resource loader), MCP mappings `stable_39` via Ploceus, LWJGL 2.
+- **Build:** Gradle 9.8.1 wrapper + Fabric Loom/Ploceus 1.17+, JDK 21 or newer (from the flake).
+  All versions live in `gradle.properties`.
+- **Key dependencies (from Maven Local):**
+  - `malilib:malilib-ornithe-1.12.2` (`malilib.*`). Provides the config system, hotkeys, the
+    widget/screen framework and the file browser the addon extends.
+  - `litematica:litematica-ornithe-1.12.2` (`litematica.*`). The post-rewrite Litematica
+    (`BaseSchematicBrowserScreen`, `SchematicInfoWidget`, `MaterialListEntryWidget`).
+  - Both are built from the sibling `../malilib` and `../litematica` workspaces with
+    `./gradlew publishToMavenLocal`.
 - **Datastore / external services:** none. Two JSON files in the MC `config/` dir (see Configuration).
 
 ## Commands
 
 ```bash
-python3 tools/setup-build-deps.py         # once: fetch pinned JDK 8 + repack litematica dependency
-export JAVA_HOME=.jdk-cache/jdk8u302-b08 # JDK 8; use the pinned 8u302 (see Gotchas), not system JDK 8
-./gradlew build                 # build → build/libs/schematicpreview-liteloader-1.12.2-<ver>.litemod
-./gradlew runClient             # run MC 1.12.2 dev client from ./minecraft (LiteLoader tweaker)
+nix develop                                       # JDK + client libraries
+(cd ../malilib && ./gradlew publishToMavenLocal)   # once per malilib change
+(cd ../litematica && ./gradlew publishToMavenLocal)
+./gradlew build                 # build → build/libs/schematicpreview-ornithe-1.12.2-<ver>.jar
+./gradlew runClient             # run the MC 1.12.2 dev client from ./run
 ./gradlew compileJava           # fast check while iterating
 ```
 
-No unit tests. `compileJava` is the smallest check; `build` also runs mixin refmap generation
-and packs the litemod. First run downloads and deobfuscates Minecraft 1.12.2 - slow, needs the
-`org.gradle.jvmargs=-Xmx3G` in `gradle.properties`.
+No unit tests. `compileJava` is the smallest check; `build` also generates the mixin refmap and
+packs the jar.
 
 ## Verification
 
 The check that must pass before any change is called done:
 
 ```bash
-./gradlew build      # must exit 0 with JAVA_HOME pointing at JDK 8
+./gradlew build      # must exit 0
 ```
 
 Then verify by hand — there are no automated tests for rendering. Two ways to get an in-game session:
@@ -196,7 +194,7 @@ file rewritten on each change), `PreviewCache` (static, GL resources — must be
 - **Config file(s):** `config/schematicpreview.json` — written by malilib `JsonModConfig`
   (categories Generic / Menu / Preview / Hotkeys). `config/schematicpreview_icons.json` —
   `DirectoryIconStore`, `{ "icons": { "<abs path>": { "itemId": "minecraft:stone", "pos": "default" } } }`.
-- **Environment variables:** `JAVA_HOME` (build only; must be JDK 8). No runtime env vars.
+- **Environment variables:** none (the flake sets `JAVA_HOME` for the build). No runtime env vars.
 - **Secrets:** none. Never add publishing tokens to the build; if a release task is added,
   read them from env vars only.
 

@@ -11,16 +11,12 @@ CLAUDE.local.md
 !.env.example
 secrets/
 
-# Gradle / ForgeGradle
+# Gradle
 .gradle/
 build/
 out/
 # runClient run dir
-minecraft/
-# litematica .litemod + pinned JDK 8, both fetched by tools/setup-build-deps.py
-libs/
-.jdk-cache/
-build.number
+run/
 
 # IDE
 .idea/

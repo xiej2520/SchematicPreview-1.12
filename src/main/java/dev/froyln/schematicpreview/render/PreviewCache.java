@@ -20,9 +20,9 @@ import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.math.Vec3d;
 
 import dev.froyln.schematicpreview.config.Configs;
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.litematica.schematic.ISchematicRegion;
-import fi.dy.masa.litematica.schematic.SchematicType;
+import litematica.schematic.Schematic;
+import litematica.schematic.LoadedSchematic;
+import litematica.schematic.SchematicRegion;
 
 /**
  * Single owner of the off-thread schematic loads and the tessellated {@link PreviewRenderer}s
@@ -37,7 +37,7 @@ public final class PreviewCache
         return thread;
     });
 
-    private static final Map<Path, CompletableFuture<ISchematic>> SCHEMATICS = new HashMap<>();
+    private static final Map<Path, CompletableFuture<Schematic>> SCHEMATICS = new HashMap<>();
     private static final Map<Path, PreviewRenderer> RENDERERS = new HashMap<>();
     // Directory -> its first schematic file; malilib rebuilds entry widgets on every scroll.
     private static final Map<Path, Optional<Path>> FIRST_SCHEMATICS = new HashMap<>();
@@ -49,17 +49,18 @@ public final class PreviewCache
     {
     }
 
-    public static CompletableFuture<ISchematic> getSchematic(Path file)
+    public static CompletableFuture<Schematic> getSchematic(Path file)
     {
         return SCHEMATICS.computeIfAbsent(file, PreviewCache::load);
     }
 
-    private static CompletableFuture<ISchematic> load(Path file)
+    private static CompletableFuture<Schematic> load(Path file)
     {
         return CompletableFuture.supplyAsync(() -> {
             try
             {
-                ISchematic schematic = SchematicType.tryCreateSchematicFrom(file);
+                LoadedSchematic loaded = LoadedSchematic.tryLoadSchematic(file).orElse(null);
+                Schematic schematic = loaded != null ? loaded.schematic : null;
 
                 if (schematic != null)
                 {
@@ -76,7 +77,7 @@ public final class PreviewCache
         }, LOADER);
     }
 
-    public static PreviewRenderer getRenderer(Path file, ISchematic schematic)
+    public static PreviewRenderer getRenderer(Path file, Schematic schematic)
     {
         return RENDERERS.computeIfAbsent(file, p -> {
             PreviewRenderer renderer = new PreviewRenderer();
@@ -105,13 +106,13 @@ public final class PreviewCache
     }
 
     /** Non-air block count from the containers; the file's own {@code TotalBlocks} tag is untrusted. */
-    public static long getBlockCount(ISchematic schematic)
+    public static long getBlockCount(Schematic schematic)
     {
         long count = 0;
 
-        for (ISchematicRegion region : schematic.getRegions().values())
+        for (SchematicRegion region : schematic.getRegions().values())
         {
-            count += region.getBlockStateContainer().getTotalBlockCount();
+            count += region.getBlockContainer().getTotalBlockCount();
         }
 
         return count;
@@ -129,14 +130,14 @@ public final class PreviewCache
             return false;
         }
 
-        CompletableFuture<ISchematic> future = getSchematic(file);
+        CompletableFuture<Schematic> future = getSchematic(file);
 
         if (future.isDone() == false)
         {
             return false;
         }
 
-        ISchematic schematic = future.getNow(null);
+        Schematic schematic = future.getNow(null);
 
         if (schematic == null || schematic.getMetadata().getTotalVolume() > Configs.Preview.PREVIEW_MAX_VOLUME.getIntegerValue())
         {
@@ -146,6 +147,11 @@ public final class PreviewCache
         PreviewRenderer renderer = getRenderer(file, schematic);
 
         renderer.tick();
+
+        if (renderer.isTessellationDone() == false)
+        {
+            return false;
+        }
 
         if (smallFbo == null || smallFbo.framebufferWidth < width || smallFbo.framebufferHeight < height)
         {

@@ -5,10 +5,10 @@ import javax.annotation.Nullable;
 
 import net.minecraft.item.Item;
 
-import fi.dy.masa.malilib.gui.BaseTextInputScreen;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.gui.widget.util.TextFieldValidator;
-import fi.dy.masa.malilib.util.StringUtils;
+import malilib.gui.BaseTextInputScreen;
+import malilib.gui.widget.button.GenericButton;
+import malilib.gui.widget.util.TextFieldValidator;
+import malilib.util.StringUtils;
 
 import dev.froyln.schematicpreview.data.DirectoryIconStore;
 import dev.froyln.schematicpreview.data.IconPosition;
@@ -36,11 +36,14 @@ public class DirectoryIconEditScreen extends BaseTextInputScreen
         this.position = existing != null ? existing.position : IconPosition.DEFAULT;
 
         this.textField.setTextValidator(new ItemIdValidator());
-        this.setLabelText("schematicpreview.gui.change_directory_icon");
 
         this.positionButton = GenericButton.create(20, this::getPositionButtonLabel, this::cyclePosition);
         this.positionButton.setWidth(Math.max(100, this.positionButton.getWidth()));
         this.positionButton.setAutomaticWidth(false);
+
+        // setLabelText() recalculates and recenters the popup immediately. Create every widget
+        // used by updateWidgetPositions() before triggering that layout pass.
+        this.setLabelText("schematicpreview.gui.change_directory_icon");
     }
 
     @Override

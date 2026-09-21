@@ -1,9 +1,9 @@
 package dev.froyln.schematicpreview.config;
 
 import com.google.common.collect.ImmutableList;
-import fi.dy.masa.malilib.gui.config.BaseConfigScreen;
-import fi.dy.masa.malilib.gui.config.BaseConfigTab;
-import fi.dy.masa.malilib.gui.config.ConfigTab;
+import malilib.gui.config.BaseConfigScreen;
+import malilib.gui.config.BaseConfigTab;
+import malilib.gui.config.ConfigTab;
 import dev.froyln.schematicpreview.Reference;
 
 public class ConfigScreen

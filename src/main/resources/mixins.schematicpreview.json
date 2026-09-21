@@ -2,17 +2,21 @@
 	"required": true,
 	"package": "dev.froyln.schematicpreview.mixin",
 	"compatibilityLevel": "JAVA_8",
-	"refmap": "mixins.schematicpreview.refmap.json",
 	"minVersion": "0.7",
 	"client": [
 		"SchematicInfoWidgetMixin",
 		"BaseSchematicBrowserScreenMixin",
+		"DirectoryNavigationWidgetMixin",
+		"DirectoryNavigationWidgetAccessor",
+		"SearchBarWidgetAccessor",
+		"BaseSchematicBrowserScreenAccessor",
+		"SchematicBrowserScreenMixin",
 		"BaseFileBrowserWidgetAccessor",
 		"BaseListWidgetAccessor",
 		"MaterialListScreenMixin",
 		"MaterialListSchematicAccessor",
 		"MaterialListPlacementAccessor",
-		"LitematicaBlockStateContainerFullAccessor",
+		"ArrayBlockContainerAccessor",
 		"MainMenuScreenMixin"
 	],
 	"injectors": {

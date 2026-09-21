@@ -1,12 +1,12 @@
 package dev.froyln.schematicpreview.config;
 
 import com.google.common.collect.ImmutableList;
-import fi.dy.masa.malilib.config.option.BooleanConfig;
-import fi.dy.masa.malilib.config.option.ConfigOption;
-import fi.dy.masa.malilib.config.option.DoubleConfig;
-import fi.dy.masa.malilib.config.option.HotkeyConfig;
-import fi.dy.masa.malilib.config.option.IntegerConfig;
-import fi.dy.masa.malilib.config.option.OptionListConfig;
+import malilib.config.option.BooleanConfig;
+import malilib.config.option.ConfigOption;
+import malilib.config.option.DoubleConfig;
+import malilib.config.option.HotkeyConfig;
+import malilib.config.option.IntegerConfig;
+import malilib.config.option.OptionConfig;
 
 public class Configs
 {
@@ -25,7 +25,7 @@ public class Configs
 
     public static class Menu
     {
-        public static final OptionListConfig<PreviewType> PREVIEW_TYPE = new OptionListConfig<>(
+        public static final OptionConfig<PreviewType> PREVIEW_TYPE = new OptionConfig<>(
                 "previewType", PreviewType.LIST, ImmutableList.copyOf(PreviewType.values()), "schematicpreview.config.comment.previewType");
         public static final IntegerConfig ENTRY_GAP_X = new IntegerConfig("entryGapX", 2, 0, 10, "schematicpreview.config.comment.entryGapX");
         public static final IntegerConfig ENTRY_GAP_Y = new IntegerConfig("entryGapY", 2, 0, 10, "schematicpreview.config.comment.entryGapY");

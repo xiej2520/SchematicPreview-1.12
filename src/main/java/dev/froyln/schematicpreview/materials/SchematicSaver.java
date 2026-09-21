@@ -1,37 +1,27 @@
 package dev.froyln.schematicpreview.materials;
 
 import java.nio.file.Path;
-import javax.annotation.Nullable;
 
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.ConfirmActionScreen;
-import fi.dy.masa.malilib.gui.TextInputScreen;
-import fi.dy.masa.malilib.gui.util.GuiUtils;
-import fi.dy.masa.malilib.util.FileNameUtils;
-import fi.dy.masa.malilib.overlay.message.MessageDispatcher;
+import litematica.schematic.Schematic;
+import litematica.schematic.util.SchematicFileUtils;
+import malilib.gui.BaseScreen;
+import malilib.gui.ConfirmActionScreen;
+import malilib.gui.TextInputScreen;
+import malilib.gui.util.GuiUtils;
+import malilib.util.FileNameUtils;
+import malilib.overlay.message.MessageDispatcher;
 
 import dev.froyln.schematicpreview.gui.PopupScreenCompat;
 import dev.froyln.schematicpreview.render.PreviewCache;
 
-/**
- * "Save" / "Save as" for a schematic read straight from disk for a material list, so Replace
- * edits can be written back. Only schematics with a backing file can be saved.
- */
+/** Save helpers for schematic edits made by the material-list UI. */
 public final class SchematicSaver
 {
-    private SchematicSaver()
-    {
-    }
+    private SchematicSaver() {}
 
-    /**
-     * Opens a confirm dialog, then overwrites {@code schematic}'s own file on confirm.
-     */
-    public static void save(ISchematic schematic)
+    public static void save(Schematic schematic, Path file)
     {
-        Path file = schematic.getFile();
         String name = file.getFileName().toString();
-
         ConfirmActionScreen screen = new ConfirmActionScreen(280,
                 "schematicpreview.gui.save_schematic.confirm_title",
                 () -> overwrite(schematic, file, name),
@@ -40,45 +30,34 @@ public final class SchematicSaver
         BaseScreen.openScreen(PopupScreenCompat.keepPopupSize(screen));
     }
 
-    /**
-     * Opens a text input pre-filled with a "_replaced" suggestion and writes a new file next to
-     * the source; Litematica's {@code writeToFile} refuses an existing name itself.
-     */
-    public static void saveAs(ISchematic schematic)
+    public static void saveAs(Schematic schematic, Path sourceFile)
     {
-        Path dir = schematic.getFile().getParent();
-        String defaultName = FileNameUtils.getFileNameWithoutExtension(schematic.getFile().getFileName().toString()) + "_replaced";
-
+        Path dir = sourceFile.getParent();
+        String defaultName = FileNameUtils.getFileNameWithoutExtension(sourceFile.getFileName().toString()) + "_replaced";
         BaseScreen.openScreenWithParent(PopupScreenCompat.keepPopupSize(
-                new TextInputScreen("schematicpreview.gui.save_schematic_as.title",
-                                    defaultName, (name) -> writeAs(schematic, dir, name))));
+                new TextInputScreen("schematicpreview.gui.save_schematic_as.title", defaultName,
+                                    name -> writeAs(schematic, dir, name))));
     }
 
-    private static void overwrite(ISchematic schematic, Path file, String name)
+    private static void overwrite(Schematic schematic, Path file, String name)
     {
-        if (schematic.writeToFile(file, true))
+        if (SchematicFileUtils.writeToFile(schematic, file, true))
         {
-            schematic.getMetadata().clearModifiedSinceSaved();
             PreviewCache.invalidate(file);
             MessageDispatcher.success().translate("schematicpreview.message.schematic_saved", name);
         }
     }
 
-    private static boolean writeAs(ISchematic schematic, Path dir, String name)
+    private static boolean writeAs(Schematic schematic, Path dir, String name)
     {
-        if (name.trim().isEmpty())
-        {
-            return false;
-        }
-
-        boolean success = schematic.writeToFile(dir, name, false);
-
+        if (name.trim().isEmpty()) return false;
+        Path file = dir.resolve(name);
+        boolean success = SchematicFileUtils.writeToFile(schematic, file, false);
         if (success)
         {
             PreviewCache.invalidateDirectory(dir);
             MessageDispatcher.success().translate("schematicpreview.message.schematic_saved", name);
         }
-
         return success;
     }
 }

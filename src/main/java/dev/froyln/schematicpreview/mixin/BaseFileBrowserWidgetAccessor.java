@@ -6,8 +6,8 @@ import java.util.function.Predicate;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-import fi.dy.masa.malilib.gui.widget.list.BaseFileBrowserWidget;
-import fi.dy.masa.malilib.gui.widget.list.header.DirectoryNavigationWidget;
+import malilib.gui.widget.list.BaseFileBrowserWidget;
+import malilib.gui.widget.list.header.DirectoryNavigationWidget;
 
 /**
  * Exposes {@code BaseFileBrowserWidget}'s private navigation bar widget, so the preview-type

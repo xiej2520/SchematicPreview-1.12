@@ -27,7 +27,7 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 
-import fi.dy.masa.litematica.schematic.ISchematic;
+import litematica.schematic.Schematic;
 
 /**
  * Owns the tessellated VBOs for one schematic and knows how to draw them into whatever
@@ -55,7 +55,7 @@ public class PreviewRenderer
     private final EnumMap<BlockRenderLayer, VertexBuffer> vbos = new EnumMap<>(BlockRenderLayer.class);
     private static final VertexBufferUploader VERTEX_UPLOADER = new VertexBufferUploader();
 
-    public void setup(ISchematic schematic)
+    public void setup(Schematic schematic)
     {
         this.access = new SchematicBlockAccess(schematic);
         this.tileEntityPositions = this.access.getTileEntityPositions();
@@ -179,10 +179,16 @@ public class PreviewRenderer
         GlStateManager.clearColor(transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 1f);
         GlStateManager.clear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 
+        // A tall, narrow side panel can require a camera distance greater than the old fixed
+        // diagonal*4 far plane. In that case the whole schematic was clipped even though the
+        // camera framing calculation had placed it correctly. Keep the far plane beyond the
+        // current camera distance and the schematic's bounding sphere.
+        double farClip = Math.max(16.0, Math.max(diagonal * 4.0, distance + diagonal * 2.0));
+
         GlStateManager.matrixMode(GL11.GL_PROJECTION);
         GlStateManager.pushMatrix();
         GlStateManager.loadIdentity();
-        Project.gluPerspective((float) fov, (float) width / (float) height, 0.05f, (float) Math.max(16.0, diagonal * 4.0));
+        Project.gluPerspective((float) fov, (float) width / (float) height, 0.05f, (float) farClip);
 
         GlStateManager.matrixMode(GL11.GL_MODELVIEW);
         GlStateManager.pushMatrix();

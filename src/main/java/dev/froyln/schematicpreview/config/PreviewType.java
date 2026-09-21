@@ -2,9 +2,9 @@ package dev.froyln.schematicpreview.config;
 
 import java.util.Locale;
 import java.util.function.IntUnaryOperator;
-import fi.dy.masa.malilib.config.value.OptionListConfigValue;
+import malilib.config.value.OptionConfigValue;
 
-public enum PreviewType implements OptionListConfigValue
+public enum PreviewType implements OptionConfigValue
 {
     LIST(1, w -> Configs.Menu.LIST_ENTRY_HEIGHT.getIntegerValue()),
     LIST_PREVIEW(1, w -> Configs.Menu.LIST_PREVIEW_ENTRY_HEIGHT.getIntegerValue()),

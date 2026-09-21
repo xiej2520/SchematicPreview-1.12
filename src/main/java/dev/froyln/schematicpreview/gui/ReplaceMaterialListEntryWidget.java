@@ -5,16 +5,16 @@ import java.util.Collection;
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemStack;
 
-import fi.dy.masa.litematica.gui.widget.list.entry.MaterialListEntryWidget;
-import fi.dy.masa.litematica.materials.MaterialListBase;
-import fi.dy.masa.litematica.materials.MaterialListEntry;
-import fi.dy.masa.litematica.materials.MaterialListPlacement;
-import fi.dy.masa.litematica.materials.MaterialListSchematic;
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetData;
-import fi.dy.masa.malilib.overlay.message.MessageDispatcher;
+import litematica.gui.widget.list.entry.MaterialListEntryWidget;
+import litematica.materials.MaterialListBase;
+import litematica.materials.MaterialListEntry;
+import litematica.materials.MaterialListPlacement;
+import litematica.materials.MaterialListSchematic;
+import litematica.schematic.Schematic;
+import malilib.gui.BaseScreen;
+import malilib.gui.widget.button.GenericButton;
+import malilib.gui.widget.list.entry.DataListEntryWidgetData;
+import malilib.overlay.message.MessageDispatcher;
 
 import dev.froyln.schematicpreview.materials.BlockReplacer;
 import dev.froyln.schematicpreview.materials.MaterialListAccessors;
@@ -62,7 +62,7 @@ public class ReplaceMaterialListEntryWidget extends MaterialListEntryWidget
 
     private void replaceWith(ItemStack oldStack, ItemStack newStack)
     {
-        ISchematic schematic;
+        Schematic schematic;
         Collection<String> regionNames;
 
         if (this.materialList instanceof MaterialListSchematic)
@@ -74,7 +74,7 @@ public class ReplaceMaterialListEntryWidget extends MaterialListEntryWidget
         else
         {
             schematic = MaterialListAccessors.getSchematic((MaterialListPlacement) this.materialList);
-            regionNames = schematic.getRegionNames();
+            regionNames = schematic.getRegions().keySet();
         }
 
         Block newBlock = Block.getBlockFromItem(newStack.getItem());
