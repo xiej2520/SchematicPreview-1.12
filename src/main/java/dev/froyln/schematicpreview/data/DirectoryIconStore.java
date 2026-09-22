@@ -1,6 +1,6 @@
 package dev.froyln.schematicpreview.data;
 
-import java.nio.file.Path;
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -9,9 +9,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import net.minecraft.item.Item;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.registry.Registry;
 
-import fi.dy.masa.malilib.config.util.ConfigUtils;
-import fi.dy.masa.malilib.util.data.json.JsonUtils;
+import fi.dy.masa.malilib.util.FileUtils;
+import fi.dy.masa.malilib.util.JsonUtils;
 
 import dev.froyln.schematicpreview.Reference;
 
@@ -58,7 +60,7 @@ public final class DirectoryIconStore
             JsonObject obj = e.getValue().getAsJsonObject();
             String itemId = JsonUtils.getString(obj, "itemId");
 
-            if (itemId == null || Item.getByNameOrId(itemId) == null)
+            if (itemId == null || getItem(itemId) == null)
             {
                 continue;
             }
@@ -86,7 +88,7 @@ public final class DirectoryIconStore
     }
 
     @Nullable
-    public static Entry get(Path directory)
+    public static Entry get(File directory)
     {
         return ICONS.get(keyFor(directory));
     }
@@ -95,9 +97,9 @@ public final class DirectoryIconStore
      * @return false if {@code itemId} isn't a registered item - the caller should not treat the
      * icon as saved in that case.
      */
-    public static boolean set(Path directory, String itemId, IconPosition position)
+    public static boolean set(File directory, String itemId, IconPosition position)
     {
-        if (Item.getByNameOrId(itemId) == null)
+        if (getItem(itemId) == null)
         {
             return false;
         }
@@ -107,7 +109,7 @@ public final class DirectoryIconStore
         return true;
     }
 
-    public static void remove(Path directory)
+    public static void remove(File directory)
     {
         if (ICONS.remove(keyFor(directory)) != null)
         {
@@ -115,14 +117,27 @@ public final class DirectoryIconStore
         }
     }
 
-    private static String keyFor(Path directory)
+    private static String keyFor(File directory)
     {
-        return directory.toAbsolutePath().normalize().toString().replace('\\', '/');
+        return directory.getAbsoluteFile().toPath().normalize().toString().replace('\\', '/');
     }
 
-    private static Path getFile()
+    private static File getFile()
     {
-        return ConfigUtils.getConfigDirectory().resolve(FILE_NAME);
+        return new File(FileUtils.getConfigDirectory(), FILE_NAME);
+    }
+
+    @Nullable
+    private static Item getItem(String id)
+    {
+        try
+        {
+            return Registry.ITEM.getOrEmpty(new Identifier(id)).orElse(null);
+        }
+        catch (IllegalArgumentException e)
+        {
+            return null;
+        }
     }
 
     public static class Entry

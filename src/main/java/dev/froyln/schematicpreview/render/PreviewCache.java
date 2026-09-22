@@ -1,34 +1,24 @@
 package dev.froyln.schematicpreview.render;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.File;
+import java.io.FileFilter;
+import java.awt.image.BufferedImage;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Predicate;
-import java.util.stream.Stream;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import javax.annotation.Nullable;
 
-import org.lwjgl.opengl.GL11;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.shader.Framebuffer;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.Vec3i;
 
 import dev.froyln.schematicpreview.config.Configs;
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.litematica.schematic.ISchematicRegion;
-import fi.dy.masa.litematica.schematic.SchematicType;
+import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 
-/**
- * Single owner of the off-thread schematic loads and the tessellated {@link PreviewRenderer}s
- * for whatever schematic path(s) are currently on screen. Freed entirely once no screen is
- * open (see {@link #tickClose()}), so GL resources never outlive the GUI that requested them.
- */
+/** Shared schematic loads, renderers, and the small preview framebuffer. */
 public final class PreviewCache
 {
     private static final Executor LOADER = Executors.newSingleThreadExecutor(runnable -> {
@@ -37,164 +27,243 @@ public final class PreviewCache
         return thread;
     });
 
-    private static final Map<Path, CompletableFuture<ISchematic>> SCHEMATICS = new HashMap<>();
-    private static final Map<Path, PreviewRenderer> RENDERERS = new HashMap<>();
-    // Directory -> its first schematic file; malilib rebuilds entry widgets on every scroll.
-    private static final Map<Path, Optional<Path>> FIRST_SCHEMATICS = new HashMap<>();
-
-    // Shared by every list/tile row preview - never one Framebuffer per row.
-    @Nullable private static Framebuffer smallFbo;
+    private static final Map<File, CompletableFuture<LitematicaSchematic>> SCHEMATICS = new HashMap<>();
+    private static final Map<File, PreviewRenderer> RENDERERS = new HashMap<>();
+    @Nullable private static Framebuffer smallFramebuffer;
 
     private PreviewCache()
     {
     }
 
-    public static CompletableFuture<ISchematic> getSchematic(Path file)
+    public static CompletableFuture<LitematicaSchematic> getSchematic(File file)
     {
-        return SCHEMATICS.computeIfAbsent(file, PreviewCache::load);
+        File key = file.getAbsoluteFile();
+        return SCHEMATICS.computeIfAbsent(key, PreviewCache::load);
     }
 
-    private static CompletableFuture<ISchematic> load(Path file)
+    private static CompletableFuture<LitematicaSchematic> load(File file)
     {
         return CompletableFuture.supplyAsync(() -> {
             try
             {
-                ISchematic schematic = SchematicType.tryCreateSchematicFrom(file);
-
-                if (schematic != null)
-                {
-                    // Warms Litematica's cached per-container block counts off-thread.
-                    getBlockCount(schematic);
-                }
-
-                return schematic;
+                return LitematicaSchematic.createFromFile(file.getParentFile(), file.getName());
             }
-            catch (Throwable t)
+            catch (Throwable ignored)
             {
                 return null;
             }
         }, LOADER);
     }
 
-    public static PreviewRenderer getRenderer(Path file, ISchematic schematic)
+    public static PreviewRenderer getRenderer(File file, LitematicaSchematic schematic)
     {
-        return RENDERERS.computeIfAbsent(file, p -> {
+        File key = file.getAbsoluteFile();
+        return RENDERERS.computeIfAbsent(key, ignored -> {
             PreviewRenderer renderer = new PreviewRenderer();
             renderer.setup(schematic);
             return renderer;
         });
     }
 
-    /**
-     * First regular file in {@code directory} (sorted by path) accepted by {@code filter}, or
-     * {@code null}; cached until {@link #close()}.
-     */
+    /** Returns the first litematic file in a directory, for directory-entry previews. */
     @Nullable
-    public static Path getFirstSchematicIn(Path directory, Predicate<Path> filter)
+    public static File getFirstSchematicIn(File directory, @Nullable FileFilter filter)
     {
-        return FIRST_SCHEMATICS.computeIfAbsent(directory, dir -> {
-            try (Stream<Path> stream = Files.list(dir))
-            {
-                return stream.filter(Files::isRegularFile).filter(filter).sorted().findFirst();
-            }
-            catch (IOException ignore)
-            {
-                return Optional.empty();
-            }
-        }).orElse(null);
+        File[] files = directory.listFiles(file -> file.isFile() &&
+                (filter == null || filter.accept(file)));
+
+        if (files == null || files.length == 0)
+        {
+            return null;
+        }
+
+        java.util.Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        return files[0];
     }
 
-    /** Non-air block count from the containers; the file's own {@code TotalBlocks} tag is untrusted. */
-    public static long getBlockCount(ISchematic schematic)
+    /**
+     * Returns the number of blocks represented by the schematic.  Normal litematic files carry
+     * this value in Metadata; the container walk is only a fallback for files with an absent or
+     * stale metadata value.
+     */
+    public static long getBlockCount(LitematicaSchematic schematic)
     {
+        int metadataCount = schematic.getMetadata().getTotalBlocks();
+
+        if (metadataCount > 0)
+        {
+            return metadataCount;
+        }
+
         long count = 0;
 
-        for (ISchematicRegion region : schematic.getRegions().values())
+        for (String name : schematic.getAreaPositions().keySet())
         {
-            count += region.getBlockStateContainer().getTotalBlockCount();
+            fi.dy.masa.litematica.schematic.container.LitematicaBlockStateContainer container =
+                    schematic.getSubRegionContainer(name);
+
+            if (container == null)
+            {
+                continue;
+            }
+
+            Vec3i size = container.getSize();
+
+            for (int y = 0; y < size.getY(); ++y)
+            {
+                for (int z = 0; z < size.getZ(); ++z)
+                {
+                    for (int x = 0; x < size.getX(); ++x)
+                    {
+                        if (container.get(x, y, z).isAir() == false)
+                        {
+                            ++count;
+                        }
+                    }
+                }
+            }
         }
 
         return count;
     }
 
-    /**
-     * Renders a small fixed-angle preview of {@code file} into the given rectangle, gated by
-     * {@code PREVIEW_MAX_VOLUME}. Returns {@code false} (draws nothing) while loading, on parse
-     * failure, or over the cap - callers keep their own fallback icon underneath.
-     */
-    public static boolean renderSmallPreview(Path file, int x, int y, int width, int height, float z)
+    public static boolean renderSmallPreview(File file, int x, int y, int width, int height)
     {
         if (width <= 0 || height <= 0)
         {
             return false;
         }
 
-        CompletableFuture<ISchematic> future = getSchematic(file);
+        CompletableFuture<LitematicaSchematic> future = getSchematic(file);
 
         if (future.isDone() == false)
         {
-            return false;
+            PreviewRenderUtils.placeholder(x, y, width, height, "Loading...");
+            return true;
         }
 
-        ISchematic schematic = future.getNow(null);
+        LitematicaSchematic schematic = future.getNow(null);
 
-        if (schematic == null || schematic.getMetadata().getTotalVolume() > Configs.Preview.PREVIEW_MAX_VOLUME.getIntegerValue())
+        if (schematic == null)
         {
-            return false;
+            PreviewRenderUtils.placeholder(x, y, width, height, "Invalid schematic");
+            return true;
+        }
+
+        if (schematic.getMetadata().getTotalVolume() > Configs.Preview.PREVIEW_MAX_VOLUME.getIntegerValue())
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Schematic too large");
+            return true;
         }
 
         PreviewRenderer renderer = getRenderer(file, schematic);
-
-        renderer.tick();
-
-        if (smallFbo == null || smallFbo.framebufferWidth < width || smallFbo.framebufferHeight < height)
-        {
-            int newWidth = Math.max(width, smallFbo == null ? 0 : smallFbo.framebufferWidth);
-            int newHeight = Math.max(height, smallFbo == null ? 0 : smallFbo.framebufferHeight);
-
-            if (smallFbo != null)
-            {
-                smallFbo.deleteFramebuffer();
-            }
-
-            smallFbo = new Framebuffer(newWidth, newHeight, true);
-            smallFbo.setFramebufferFilter(GL11.GL_NEAREST);
-        }
-
-        smallFbo.bindFramebuffer(true);
-
+        double distance = renderer.getDefaultDistance(Configs.Preview.PREVIEW_FOV.getDoubleValue(), (double) width / height);
         Vec3d center = renderer.getCenter();
-        float yRot = (float) Configs.Preview.PREVIEW_ROTATION_Y.getDoubleValue();
-        float xRot = (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue();
-        double fov = Configs.Preview.PREVIEW_FOV.getDoubleValue();
-        renderer.draw(width, height, fov, yRot, xRot, renderer.getDefaultDistance(fov, (double) width / height),
-                      center.x, center.y, center.z, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
-
-        Minecraft.getMinecraft().getFramebuffer().bindFramebuffer(true);
-
-        PreviewRenderUtils.blitFramebuffer(smallFbo, x, y, width, height, width, height, z);
-
+        renderPreview(file, x, y, width, height,
+                      (float) Configs.Preview.PREVIEW_ROTATION_Y.getDoubleValue(),
+                      (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue(), distance,
+                      center.x, center.y, center.z);
         return true;
     }
 
-    public static void tickClose()
+    public static boolean renderPreview(File file, int x, int y, int width, int height,
+                                        float yRot, float xRot, double distance,
+                                        double targetX, double targetY, double targetZ)
     {
-        boolean hasState = SCHEMATICS.isEmpty() == false || RENDERERS.isEmpty() == false ||
-                           FIRST_SCHEMATICS.isEmpty() == false || smallFbo != null;
+        CompletableFuture<LitematicaSchematic> future = getSchematic(file);
 
-        if (Minecraft.getMinecraft().currentScreen == null && hasState)
+        if (future.isDone() == false)
         {
-            close();
+            PreviewRenderUtils.placeholder(x, y, width, height, "Loading...");
+            return true;
         }
+
+        LitematicaSchematic schematic = future.getNow(null);
+
+        if (schematic == null)
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Invalid schematic");
+            return true;
+        }
+
+        if (getBlockCount(schematic) > Configs.Preview.PREVIEW_MAX_BLOCKS.getIntegerValue())
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Too many blocks");
+            return true;
+        }
+
+        PreviewRenderer renderer = getRenderer(file, schematic);
+        renderer.tick();
+
+        if (renderer.isTessellationDone() == false)
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Loading preview...");
+            return true;
+        }
+
+        int scale = (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor());
+        int framebufferWidth = Math.max(1, width * scale);
+        int framebufferHeight = Math.max(1, height * scale);
+        ensureFramebuffer(framebufferWidth, framebufferHeight);
+        smallFramebuffer.beginWrite(true);
+        renderer.draw(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), yRot, xRot,
+                      distance, targetX, targetY, targetZ);
+        MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+        PreviewRenderUtils.blitFramebuffer(smallFramebuffer, x, y, width, height,
+                                           framebufferWidth, framebufferHeight);
+        return true;
     }
 
-    /** Drops the cached schematic and renderer for {@code file}; call after overwriting it on disk. */
-    public static void invalidate(Path file)
+    @Nullable
+    public static BufferedImage capturePreview(File file, int width, int height,
+                                               float yRot, float xRot, double distance,
+                                               double targetX, double targetY, double targetZ)
     {
-        SCHEMATICS.remove(file);
-        invalidateDirectory(file.getParent());
+        CompletableFuture<LitematicaSchematic> future = getSchematic(file);
 
-        PreviewRenderer renderer = RENDERERS.remove(file);
+        if (future.isDone() == false)
+        {
+            return null;
+        }
+
+        LitematicaSchematic schematic = future.getNow(null);
+
+        if (schematic == null || getBlockCount(schematic) > Configs.Preview.PREVIEW_MAX_BLOCKS.getIntegerValue())
+        {
+            return null;
+        }
+
+        PreviewRenderer renderer = getRenderer(file, schematic);
+        renderer.tick();
+
+        int scale = (int) Math.round(MinecraftClient.getInstance().getWindow().getScaleFactor());
+        int framebufferWidth = Math.max(1, width * scale);
+        int framebufferHeight = Math.max(1, height * scale);
+
+        return renderer.captureImage(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(),
+                                     yRot, xRot, distance, targetX, targetY, targetZ);
+    }
+
+    private static void ensureFramebuffer(int width, int height)
+    {
+        if (smallFramebuffer == null)
+        {
+            smallFramebuffer = new Framebuffer(width, height, true, true);
+        }
+        else if (smallFramebuffer.textureWidth < width || smallFramebuffer.textureHeight < height)
+        {
+            smallFramebuffer.resize(Math.max(width, smallFramebuffer.textureWidth),
+                                    Math.max(height, smallFramebuffer.textureHeight), true);
+        }
+
+        smallFramebuffer.setTexFilter(9728);
+    }
+
+    public static void invalidate(File file)
+    {
+        File key = file.getAbsoluteFile();
+        SCHEMATICS.remove(key);
+        PreviewRenderer renderer = RENDERERS.remove(key);
 
         if (renderer != null)
         {
@@ -202,16 +271,24 @@ public final class PreviewCache
         }
     }
 
-    /** Forgets which file is first in {@code directory}, e.g. after a new file was written into it. */
-    public static void invalidateDirectory(@Nullable Path directory)
+    public static void invalidateDirectory(File directory)
     {
-        FIRST_SCHEMATICS.remove(directory);
-    }
+        String prefix = directory.getAbsoluteFile().toPath().normalize().toString();
 
-    /** Forgets every directory's first file; called whenever a browser list is (re)built. */
-    public static void invalidateDirectories()
-    {
-        FIRST_SCHEMATICS.clear();
+        SCHEMATICS.keySet().removeIf(file -> file.getParentFile() != null &&
+                file.getParentFile().getAbsolutePath().startsWith(prefix));
+        RENDERERS.entrySet().removeIf(entry -> {
+            File file = entry.getKey();
+            boolean matches = file.getParentFile() != null &&
+                    file.getParentFile().getAbsolutePath().startsWith(prefix);
+
+            if (matches)
+            {
+                entry.getValue().close();
+            }
+
+            return matches;
+        });
     }
 
     public static void close()
@@ -223,12 +300,19 @@ public final class PreviewCache
 
         RENDERERS.clear();
         SCHEMATICS.clear();
-        FIRST_SCHEMATICS.clear();
 
-        if (smallFbo != null)
+        if (smallFramebuffer != null)
         {
-            smallFbo.deleteFramebuffer();
-            smallFbo = null;
+            smallFramebuffer.delete();
+            smallFramebuffer = null;
+        }
+    }
+
+    public static void tickClose(MinecraftClient mc)
+    {
+        if (mc.currentScreen == null && (SCHEMATICS.isEmpty() == false || RENDERERS.isEmpty() == false || smallFramebuffer != null))
+        {
+            close();
         }
     }
 }

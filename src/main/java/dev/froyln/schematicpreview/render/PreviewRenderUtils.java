@@ -2,66 +2,62 @@ package dev.froyln.schematicpreview.render;
 
 import org.lwjgl.opengl.GL11;
 
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.shader.Framebuffer;
+import com.mojang.blaze3d.systems.RenderSystem;
 
-import fi.dy.masa.malilib.gui.util.ScreenContext;
-import fi.dy.masa.malilib.render.ShapeRenderUtils;
-import fi.dy.masa.malilib.render.text.StyledTextLine;
-import fi.dy.masa.malilib.render.text.TextRenderer;
-import fi.dy.masa.malilib.util.StringUtils;
+import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 
-/** FBO-blit and placeholder helpers shared by {@code PreviewWidget} and {@code PreviewCache}. */
+
 public final class PreviewRenderUtils
 {
     private PreviewRenderUtils()
     {
     }
 
-    /** Blits the full extent of {@code fbo}'s color texture at {@code (x, y, width, height)}. */
-    public static void blitFramebuffer(Framebuffer fbo, int x, int y, int width, int height, float z)
+    public static void blitFramebuffer(Framebuffer framebuffer, int x, int y, int width, int height)
     {
-        blitFramebuffer(fbo, x, y, width, height, fbo.framebufferWidth, fbo.framebufferHeight, z);
+        blitFramebuffer(framebuffer, x, y, width, height, width, height);
     }
 
-    /**
-     * Blits only the {@code (usedWidth, usedHeight)} sub-rectangle of {@code fbo} that was
-     * rendered into - for the shared grow-only FBO, which can be larger than the viewport.
-     */
-    public static void blitFramebuffer(Framebuffer fbo, int x, int y, int width, int height, int usedWidth, int usedHeight, float z)
+    public static void blitFramebuffer(Framebuffer framebuffer, int x, int y, int width, int height,
+                                       int usedWidth, int usedHeight)
     {
-        GlStateManager.enableBlend();
-        GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                                            GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-        GlStateManager.color(1f, 1f, 1f, 1f);
-        GlStateManager.enableTexture2D();
-        GlStateManager.bindTexture(fbo.framebufferTexture);
-
-        double maxU = usedWidth / (double) fbo.framebufferWidth;
-        double maxV = usedHeight / (double) fbo.framebufferHeight;
+        RenderSystem.enableTexture();
+        // The preview framebuffer already has an opaque background. Blending it with the
+        // screen would let the live world show through transparent schematic blocks.
+        RenderSystem.disableBlend();
+        RenderSystem.color4f(1f, 1f, 1f, 1f);
+        RenderSystem.bindTexture(framebuffer.colorAttachment);
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-        buffer.pos(x, y + height, z).tex(0.0, 0.0).endVertex();
-        buffer.pos(x + width, y + height, z).tex(maxU, 0.0).endVertex();
-        buffer.pos(x + width, y, z).tex(maxU, maxV).endVertex();
-        buffer.pos(x, y, z).tex(0.0, maxV).endVertex();
+        buffer.begin(GL11.GL_QUADS, VertexFormats.POSITION_TEXTURE);
+        float maxU = usedWidth / (float) framebuffer.textureWidth;
+        float maxV = usedHeight / (float) framebuffer.textureHeight;
+        buffer.vertex(x, y + height, 0).texture(0, 0).next();
+        buffer.vertex(x + width, y + height, 0).texture(maxU, 0).next();
+        buffer.vertex(x + width, y, 0).texture(maxU, maxV).next();
+        buffer.vertex(x, y, 0).texture(0, maxV).next();
         tessellator.draw();
-
-        GlStateManager.disableBlend();
+        RenderSystem.disableBlend();
     }
 
-    public static void renderPlaceholder(int x, int y, int width, int height, float z, String translationKey, ScreenContext ctx)
+    public static void placeholder(int x, int y, int width, int height, String text)
     {
-        ShapeRenderUtils.renderRectangle(x, y, z, width, height, 0x80000000);
-        String text = StringUtils.translate(translationKey);
-        TextRenderer textRenderer = TextRenderer.INSTANCE;
-        int textX = x + Math.max(0, (width - textRenderer.getRenderWidth(text)) / 2);
-        int textY = y + Math.max(0, (height - textRenderer.getFontHeight()) / 2);
-        textRenderer.renderLine(textX, textY, z + 1f, 0xFFFFFFFF, true, StyledTextLine.of(text), ctx);
+        com.mojang.blaze3d.systems.RenderSystem.disableTexture();
+        com.mojang.blaze3d.systems.RenderSystem.color4f(0.02f, 0.02f, 0.02f, 0.65f);
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        buffer.begin(GL11.GL_QUADS, VertexFormats.POSITION);
+        buffer.vertex(x, y + height, 0).next();
+        buffer.vertex(x + width, y + height, 0).next();
+        buffer.vertex(x + width, y, 0).next();
+        buffer.vertex(x, y, 0).next();
+        tessellator.draw();
+        RenderSystem.enableTexture();
+        MinecraftClient.getInstance().textRenderer.drawWithShadow(text, x + 4, y + 4, 0xFFFFFFFF);
     }
 }

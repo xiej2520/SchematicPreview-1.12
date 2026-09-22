@@ -1,60 +1,61 @@
 package dev.froyln.schematicpreview;
 
-import java.util.List;
 import com.google.common.collect.ImmutableList;
-import fi.dy.masa.malilib.config.JsonModConfig;
-import fi.dy.masa.malilib.config.category.BaseConfigOptionCategory;
-import fi.dy.masa.malilib.config.category.ConfigOptionCategory;
-import fi.dy.masa.malilib.event.InitializationHandler;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.input.ActionResult;
-import fi.dy.masa.malilib.input.Hotkey;
-import fi.dy.masa.malilib.input.HotkeyCategory;
-import fi.dy.masa.malilib.input.HotkeyProvider;
-import fi.dy.masa.malilib.registry.Registry;
+
+import fi.dy.masa.malilib.config.ConfigManager;
+import fi.dy.masa.malilib.event.InputEventHandler;
+import fi.dy.masa.malilib.event.TickHandler;
+import fi.dy.masa.malilib.gui.GuiBase;
+import fi.dy.masa.malilib.hotkeys.IHotkey;
+import fi.dy.masa.malilib.hotkeys.IHotkeyCallback;
+import fi.dy.masa.malilib.hotkeys.IKeybind;
+import fi.dy.masa.malilib.hotkeys.IKeybindManager;
+import fi.dy.masa.malilib.hotkeys.IKeybindProvider;
+import fi.dy.masa.malilib.hotkeys.KeyAction;
+import fi.dy.masa.malilib.interfaces.IInitializationHandler;
+
 import dev.froyln.schematicpreview.config.ConfigScreen;
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.data.DirectoryIconStore;
 import dev.froyln.schematicpreview.render.PreviewCache;
 
-public class InitHandler implements InitializationHandler
+public class InitHandler implements IInitializationHandler
 {
     @Override
     public void registerModHandlers()
     {
         DirectoryIconStore.load();
+        ConfigManager.getInstance().registerConfigHandler(Reference.MOD_ID, new Configs());
+        InputEventHandler.getKeybindManager().registerKeybindProvider(new KeybindProvider());
+        TickHandler.getInstance().registerClientTickHandler(PreviewCache::tickClose);
 
-        List<ConfigOptionCategory> categories = ImmutableList.of(
-                BaseConfigOptionCategory.normal(Reference.MOD_INFO, "Generic", Configs.Generic.OPTIONS),
-                BaseConfigOptionCategory.normal(Reference.MOD_INFO, "Menu", Configs.Menu.OPTIONS),
-                BaseConfigOptionCategory.normal(Reference.MOD_INFO, "Preview", Configs.Preview.OPTIONS)
-        );
-        Registry.CONFIG_MANAGER.registerConfigHandler(
-                JsonModConfig.createJsonModConfig(Reference.MOD_INFO, Configs.CURRENT_VERSION, categories, null));
-
-        Registry.CONFIG_SCREEN.registerConfigScreenFactory(Reference.MOD_INFO, ConfigScreen::create);
-        Registry.CONFIG_TAB.registerConfigTabProvider(Reference.MOD_INFO, () -> ConfigScreen.CONFIG_TABS);
-
-        Registry.HOTKEY_MANAGER.registerHotkeyProvider(new HotkeyProvider()
+        Configs.Generic.OPEN_CONFIG_SCREEN.getKeybind().setCallback(new IHotkeyCallback()
         {
             @Override
-            public List<? extends Hotkey> getAllHotkeys()
+            public boolean onKeyAction(KeyAction action, IKeybind key)
             {
-                return Configs.HOTKEYS;
-            }
-
-            @Override
-            public List<HotkeyCategory> getHotkeysByCategories()
-            {
-                return ImmutableList.of(new HotkeyCategory(Reference.MOD_INFO, "schematicpreview.hotkeys.category.generic", Configs.HOTKEYS));
+                GuiBase.openGui(ConfigScreen.create());
+                return true;
             }
         });
+    }
 
-        Registry.TICK_EVENT_DISPATCHER.registerClientTickHandler(PreviewCache::tickClose);
+    private static final class KeybindProvider implements IKeybindProvider
+    {
+        @Override
+        public void addKeysToMap(IKeybindManager manager)
+        {
+            for (IHotkey hotkey : Configs.HOTKEYS)
+            {
+                manager.addKeybindToMap(hotkey.getKeybind());
+            }
+        }
 
-        Configs.Generic.OPEN_CONFIG_SCREEN.setHotkeyCallback((action, key) -> {
-            BaseScreen.openScreen(ConfigScreen.create());
-            return ActionResult.SUCCESS;
-        });
+        @Override
+        public void addHotkeys(IKeybindManager manager)
+        {
+            manager.addHotkeysForCategory(Reference.MOD_ID,
+                    "schematicpreview.hotkeys.category.generic", Configs.HOTKEYS);
+        }
     }
 }

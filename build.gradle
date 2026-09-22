@@ -1,167 +1,76 @@
-buildscript {
-    repositories {
-        maven {
-            name = "forge"
-            url = "https://maven.minecraftforge.net"
-        }
-        maven {
-            name = 'sponge'
-            url = 'https://repo.spongepowered.org/repository/maven-public'
-        }
-    }
-
-    dependencies {
-        classpath "net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT"
-        classpath 'org.spongepowered:mixingradle:0.6-SNAPSHOT'
-    }
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'maven-publish'
 }
 
 repositories {
-    maven {
-        url 'https://masa.dy.fi/maven'
-    }
-    flatDir {
-        dirs 'libs'
-    }
-    // Only for the SpecialSource tool dependency used by remapLitematica below.
-    mavenCentral()
+    maven { url = 'https://maven.terraformersmc.com/releases/' }
+    mavenLocal()
 }
-
-apply plugin: 'net.minecraftforge.gradle.liteloader'
-apply plugin: 'org.spongepowered.mixin'
-
-ext.configFile = file "build.properties"
-
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-compileJava {
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
-    options.encoding = 'UTF-8'
-}
-
-configFile.withReader {
-    def prop = new Properties()
-    prop.load(it)
-    project.ext.config = new ConfigSlurper().parse prop
-}
-
-minecraft {
-    version = config.minecraft_version
-    mappings = config.mappings_version
-    runDir = 'minecraft'
-    makeObfSourceJar = false
-
-    ext.mod_version = config.mod_version
-
-    if (mod_version.endsWith('-dev')) {
-        mod_version = mod_version + "." + new Date().format('yyyyMMdd.HHmmss')
-    }
-
-    replaceIn "Reference.java"
-    replace "@MOD_VERSION@", mod_version
-}
-
-configurations {
-    specialSource
-}
-
-// Litematica's litemod is compiled by its author directly against raw notch-obfuscated
-// Minecraft (LiteLoader's normal dev workflow - no SRG stage), unlike a typical Forge-
-// ecosystem ":deobf" Maven artifact (which malilib publishes, so deobfCompile below works
-// for it unmodified). ForgeGradle's deobfCompile/TaskSingleDeobfBin assumes SRG-named input
-// and only remaps SRG -> MCP; it silently leaves vanilla type references notch-obfuscated in
-// Litematica's method signatures (e.g. ISchematicRegion.getPosition() would compile as
-// returning a class literally named "et" instead of BlockPos). Fix: remap the raw litemod
-// notch -> MCP ourselves with SpecialSource (the same tool FG uses internally for the
-// vanilla jar itself) and the notch-mcp.srg mapping FG already generates, then add the
-// result as a plain compile dependency instead of deobfCompile.
-ext.remapLitematicaOutput = file("$buildDir/remapped/litematica-liteloader-" + config.minecraft_version_out + "-" + config.litematica_version + ".jar")
 
 dependencies {
-    deobfCompile "fi.dy.masa.malilib:malilib-liteloader-" + config.minecraft_version_out + ":" + config.malilib_version + ":deobf"
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.mappings_version}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+    implementation "com.google.code.findbugs:jsr305:3.0.2"
 
-    specialSource "net.md-5:SpecialSource:1.8.3:shaded"
-}
+    include(modApi(fabricApi.module("fabric-api-base", project.fabric_api_version)))
+    include(modApi(fabricApi.module("fabric-networking-api-v1", project.fabric_api_version)))
+    include(modApi(fabricApi.module("fabric-resource-loader-v0", project.fabric_api_version)))
 
-// Litematica LiteLoader is not published to a Maven repo. Drop the .litemod file in libs/
-// (see README "Building"); it is added to the compile classpath in the afterEvaluate block
-// below (as the SpecialSource-remapped jar, not deobfCompile - see remapLitematica above).
+    def localMalilib = file("../malilib/build/devlibs/malilib-fabric-${project.minecraft_version_out}-${project.malilib_version}-dev.jar")
+    def localLitematica = file("../litematica/build/devlibs/litematica-fabric-${project.minecraft_version_out}-${project.litematica_version}-dev.jar")
 
-task remapLitematica(type: JavaExec) {
-    dependsOn genSrgs
-
-    def mcpParts = config.mappings_version.tokenize('_') // "stable_39" -> ["stable", "39"]
-    def inputFile = file("libs/litematica-liteloader-" + config.minecraft_version_out + "-" + config.litematica_version + ".litemod")
-    def notchToMcpSrg = new File(gradle.gradleUserHomeDir,
-            "caches/minecraft/de/oceanlabs/mcp/mcp_${mcpParts[0]}/${mcpParts[1]}/${config.minecraft_version}/srgs/notch-mcp.srg")
-
-    inputs.file inputFile
-    outputs.file remapLitematicaOutput
-
-    doFirst {
-        remapLitematicaOutput.parentFile.mkdirs()
+    if (localMalilib.isFile() && localLitematica.isFile())
+    {
+        modImplementation files(localMalilib, localLitematica)
+    }
+    else
+    {
+        modImplementation "fi.dy.masa.malilib:malilib-fabric-${project.minecraft_version_out}:${project.malilib_version}"
+        modImplementation "fi.dy.masa.litematica:litematica-fabric-${project.minecraft_version_out}:${project.litematica_version}"
     }
 
-    classpath = configurations.specialSource
-    main = 'net.md_5.specialsource.SpecialSource'
-    args = ['-i', inputFile.path, '-o', remapLitematicaOutput.path, '-m', notchToMcpSrg.path,
-            '--kill-lvt', '--kill-generics', '--kill-source']
+    modCompileOnly "com.terraformersmc:modmenu:${project.mod_menu_version}"
 }
 
-compileJava.dependsOn remapLitematica
-
-sourceSets {
-    main {
-        ext.refMap = 'mixins.' + config.mod_id + '.refmap.json'
+configurations.configureEach {
+    resolutionStrategy {
+        force("net.fabricmc:fabric-loader:${project.fabric_loader_version}")
     }
 }
 
-group = config.group + "." + config.mod_id // http://maven.apache.org/guides/mini/guide-naming-conventions.html
-archivesBaseName = config.mod_file_name + '-' + config.minecraft_version_out
-version = project.minecraft.mod_version
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
 
-/**
- * This section allows you to customise the generated litemod.json file
- */
-litemod {
-    json {
-        name = config.mod_id
-        displayName = config.mod_name
-        mcversion = config.minecraft_version
-        version = config.mod_version
-        author = config.author
+group = project.group + '.' + project.mod_id
+version = project.mod_version
 
-        dependsOn = [ 'malilib', 'litematica' ]
-        mixinConfigs = [ 'mixins.' + config.mod_id + '.json' ]
+base {
+    archivesName = project.mod_file_name + '-' + project.minecraft_version_out
+}
+
+processResources {
+    inputs.property 'mod_version', project.mod_version
+    filesMatching('fabric.mod.json') {
+        expand 'mod_version': project.mod_version
     }
 }
 
-/**
- * This section allows you to customise your generated jar (litemod) file. By
- * default it includes the generated litemod.json file, however if you prefer to
- * include your own file from resources, simply remove the line below.
- */
-jar {
-    // Remove the "-mc1.12" suffix from the file name
-    classifier = ""
-    // Don't append a 'mod-' filename prefix >_>
-    baseName = archivesBaseName
-
-    from litemod.outputs
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 8
 }
 
-mixin {
-    defaultObfuscationEnv notch
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = true
 }
 
-// The LiteLoader plugin also puts the raw (still notch-obfuscated) litemod from libs/
-// directly on the compile classpath, ahead of our remapped jar - javac then resolves
-// Litematica's classes from that raw entry first. Runs in afterEvaluate so it applies
-// after the plugin's own classpath wiring, not before it.
-afterEvaluate {
-    sourceSets.main.compileClasspath = sourceSets.main.compileClasspath.filter {
-        it.name.endsWith('.litemod') == false
-    } + files(remapLitematicaOutput)
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = base.archivesName.get()
+            from components.java
+        }
+    }
 }
