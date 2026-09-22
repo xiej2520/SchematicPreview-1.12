@@ -1,6 +1,5 @@
 package dev.froyln.schematicpreview.gui;
 
-import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -14,18 +13,15 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.MinecraftClient;
 
-import fi.dy.masa.malilib.util.FileNameUtils;
-
-/**
- * File-save and clipboard export for a captured preview image ({@link PreviewWidget#captureImage()}).
- * Both are one-shot, stateless operations - no caller keeps a reference to anything here.
- */
+/** Saves or copies a rendered schematic preview image. */
 public final class ScreenshotUtil
 {
     private ScreenshotUtil()
@@ -33,20 +29,27 @@ public final class ScreenshotUtil
     }
 
     @Nullable
-    public static File save(BufferedImage image, Path schematicPath)
+    public static File save(BufferedImage image, File schematic)
     {
         try
         {
-            Path dir = Minecraft.getMinecraft().gameDir.toPath().resolve("screenshots").resolve("schematicpreview");
-            Files.createDirectories(dir);
+            Path directory = MinecraftClient.getInstance().runDirectory.toPath()
+                    .resolve("screenshots").resolve("schematicpreview");
+            Files.createDirectories(directory);
 
-            // Not FileNameUtils.generateSimpleSafeFileName: that lowercases the name.
-            String name = FileNameUtils.getFileNameWithoutExtension(schematicPath.getFileName().toString())
-                                       .replaceAll("[^A-Za-z0-9_-]", "_");
-            File file = dir.resolve(name + "_" + FileNameUtils.getDateTimeString() + ".png").toFile();
+            String name = schematic.getName();
+            int dot = name.lastIndexOf('.');
 
-            ImageIO.write(image, "png", file);
-            return file;
+            if (dot > 0)
+            {
+                name = name.substring(0, dot);
+            }
+
+            name = name.replaceAll("[^A-Za-z0-9_-]", "_");
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+            File output = directory.resolve(name + "_" + timestamp + ".png").toFile();
+            ImageIO.write(image, "png", output);
+            return output;
         }
         catch (IOException e)
         {
@@ -57,6 +60,15 @@ public final class ScreenshotUtil
     public static boolean copyToClipboard(BufferedImage image)
     {
         if (System.getenv("WAYLAND_DISPLAY") != null && copyViaWlCopy(image))
+        {
+            return true;
+        }
+
+        // AWT clipboard access is not reliable from a GLFW client on Wayland.  Try the
+        // X11 clipboard helpers as well, which covers XWayland sessions and older desktop
+        // environments where the Java toolkit owns no display connection.
+        if (System.getenv("DISPLAY") != null && copyViaCommand(image,
+                "xclip", "-selection", "clipboard", "-t", "image/png", "-i"))
         {
             return true;
         }
@@ -73,22 +85,21 @@ public final class ScreenshotUtil
         }
     }
 
-    /**
-     * Under Wayland the game is an XWayland client and the compositor's clipboard bridge
-     * truncates AWT's INCR transfer for large images, so hand the PNG to {@code wl-copy}
-     * (a native owner) and fall back to AWT only if it isn't installed. See AGENTS.md Gotchas.
-     */
     private static boolean copyViaWlCopy(BufferedImage image)
+    {
+        return copyViaCommand(image, "wl-copy", "--type", "image/png");
+    }
+
+    private static boolean copyViaCommand(BufferedImage image, String... command)
     {
         try
         {
             ByteArrayOutputStream png = new ByteArrayOutputStream();
             ImageIO.write(image, "png", png);
 
-            // Discard output: an unread pipe would block the child.
-            Process process = new ProcessBuilder("wl-copy", "--type", "image/png")
+            Process process = new ProcessBuilder(command)
                     .redirectErrorStream(true)
-                    .redirectOutput(new File("/dev/null"))
+                    .redirectOutput(ProcessBuilder.Redirect.PIPE)
                     .start();
 
             try (OutputStream stdin = process.getOutputStream())
@@ -96,37 +107,44 @@ public final class ScreenshotUtil
                 png.writeTo(stdin);
             }
 
-            if (process.waitFor(10, TimeUnit.SECONDS) == false)
+            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+
+            if (finished == false)
             {
-                process.destroyForcibly();
+                process.destroy();
                 return false;
+            }
+
+            // Drain the merged error stream after the process exits.  The helper normally
+            // prints nothing, but this also prevents a diagnostic pipe from being left open.
+            while (process.getInputStream().read() >= 0)
+            {
+                // drain
             }
 
             return process.exitValue() == 0;
         }
-        catch (IOException | InterruptedException e)
+        catch (IOException e)
         {
+            return false;
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
 
-    /**
-     * AWT re-encodes the clipboard image on demand and the JDK JPEG writer mangles ARGB input
-     * (inverted colors), so the clipboard gets an opaque {@code TYPE_INT_RGB} composite over
-     * the preview's background color.
-     */
     private static BufferedImage toOpaque(BufferedImage image)
     {
         BufferedImage opaque = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = opaque.createGraphics();
-        g.setColor(CLIPBOARD_BACKGROUND);
-        g.fillRect(0, 0, opaque.getWidth(), opaque.getHeight());
-        g.drawImage(image, 0, 0, null);
-        g.dispose();
+        Graphics2D graphics = opaque.createGraphics();
+        graphics.setColor(new java.awt.Color(13, 13, 13));
+        graphics.fillRect(0, 0, opaque.getWidth(), opaque.getHeight());
+        graphics.drawImage(image, 0, 0, null);
+        graphics.dispose();
         return opaque;
     }
-
-    private static final Color CLIPBOARD_BACKGROUND = new Color(13, 13, 13);
 
     private static final class TransferableImage implements Transferable
     {
@@ -152,7 +170,7 @@ public final class ScreenshotUtil
         @Override
         public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException
         {
-            if (DataFlavor.imageFlavor.equals(flavor) == false)
+            if (this.isDataFlavorSupported(flavor) == false)
             {
                 throw new UnsupportedFlavorException(flavor);
             }

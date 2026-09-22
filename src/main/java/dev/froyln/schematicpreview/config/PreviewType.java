@@ -1,24 +1,18 @@
 package dev.froyln.schematicpreview.config;
 
 import java.util.Locale;
-import java.util.function.IntUnaryOperator;
-import fi.dy.masa.malilib.config.value.OptionListConfigValue;
 
-public enum PreviewType implements OptionListConfigValue
+import fi.dy.masa.malilib.config.IConfigOptionListEntry;
+
+public enum PreviewType implements IConfigOptionListEntry
 {
-    LIST(1, w -> Configs.Menu.LIST_ENTRY_HEIGHT.getIntegerValue()),
-    LIST_PREVIEW(1, w -> Configs.Menu.LIST_PREVIEW_ENTRY_HEIGHT.getIntegerValue()),
-    TILE_5(5, PreviewType::tileWidthToHeight),
-    TILE_4(4, PreviewType::tileWidthToHeight),
-    TILE_3(3, PreviewType::tileWidthToHeight);
+    LIST(1), LIST_PREVIEW(1), TILE_5(5), TILE_4(4), TILE_3(3);
 
     private final int columns;
-    private final IntUnaryOperator widthToHeight;
 
-    PreviewType(int columns, IntUnaryOperator widthToHeight)
+    PreviewType(int columns)
     {
         this.columns = columns;
-        this.widthToHeight = widthToHeight;
     }
 
     public int getColumns()
@@ -28,7 +22,17 @@ public enum PreviewType implements OptionListConfigValue
 
     public int getHeight(int width)
     {
-        return this.widthToHeight.applyAsInt(width);
+        if (this == LIST)
+        {
+            return Configs.Menu.LIST_ENTRY_HEIGHT.getIntegerValue();
+        }
+
+        if (this == LIST_PREVIEW)
+        {
+            return Configs.Menu.LIST_PREVIEW_ENTRY_HEIGHT.getIntegerValue();
+        }
+
+        return (int) (width * Configs.Menu.TILE_HEIGHT_RATIO.getDoubleValue());
     }
 
     public boolean isTile()
@@ -38,11 +42,11 @@ public enum PreviewType implements OptionListConfigValue
 
     public boolean hasPreview()
     {
-        return this == LIST_PREVIEW || this.isTile();
+        return this != LIST;
     }
 
     @Override
-    public String getName()
+    public String getStringValue()
     {
         return this.name().toLowerCase(Locale.ROOT);
     }
@@ -53,8 +57,35 @@ public enum PreviewType implements OptionListConfigValue
         return this.name();
     }
 
-    private static int tileWidthToHeight(int width)
+    @Override
+    public IConfigOptionListEntry fromString(String value)
     {
-        return (int) (width * Configs.Menu.TILE_HEIGHT_RATIO.getDoubleValue());
+        for (PreviewType type : values())
+        {
+            if (type.getStringValue().equals(value))
+            {
+                return type;
+            }
+        }
+
+        return LIST;
+    }
+
+    @Override
+    public IConfigOptionListEntry cycle(boolean forward)
+    {
+        PreviewType[] values = values();
+        int index = this.ordinal() + (forward ? 1 : -1);
+
+        if (index < 0)
+        {
+            index = values.length - 1;
+        }
+        else if (index >= values.length)
+        {
+            index = 0;
+        }
+
+        return values[index];
     }
 }

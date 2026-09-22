@@ -1,149 +1,250 @@
 package dev.froyln.schematicpreview.gui;
 
-import java.awt.image.BufferedImage;
 import java.io.File;
-import java.nio.file.Path;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.overlay.message.MessageDispatcher;
+import fi.dy.masa.litematica.schematic.LitematicaSchematic;
+import fi.dy.masa.malilib.gui.GuiBase;
+import fi.dy.masa.malilib.gui.button.ButtonGeneric;
+import fi.dy.masa.malilib.render.RenderUtils;
+import fi.dy.masa.malilib.gui.Message.MessageType;
+import fi.dy.masa.malilib.util.InfoUtils;
+import fi.dy.masa.malilib.util.StringUtils;
 
-/**
- * Fullscreen view of a schematic preview. Asks {@code PreviewCache} for the same path's
- * {@code PreviewRenderer} the side panel used, so entering/leaving fullscreen never
- * re-tessellates.
- */
-public class PreviewFullscreenScreen extends BaseScreen
+import dev.froyln.schematicpreview.config.Configs;
+import dev.froyln.schematicpreview.render.PreviewCache;
+import dev.froyln.schematicpreview.render.PreviewRenderer;
+
+/** Full-screen 1.15 preview using the same cached renderer as the browser panel. */
+public class PreviewFullscreenScreen extends GuiBase
 {
-    private static final int TOP_MARGIN = 16;
-    private static final int BUTTON_SIZE = 14;
+    private static final int TOP_MARGIN = 24;
 
-    private final Path path;
-    private PreviewWidget widget;
-    private GenericButton saveButton;
-    private GenericButton copyButton;
+    private final File file;
+    private boolean cameraInitialized;
+    private boolean dragging;
+    private boolean freecam;
+    private int dragButton;
+    private int dragX;
+    private int dragY;
+    private float yRot;
+    private float xRot;
+    private double distance;
+    private double targetX;
+    private double targetY;
+    private double targetZ;
 
-    public PreviewFullscreenScreen(Path path)
+    public PreviewFullscreenScreen(File file)
     {
-        this.path = path;
-
-        // Solid backdrop instead of malilib's translucent default.
-        this.backgroundColor = 0xFF000000;
+        this.file = file;
+        this.title = StringUtils.translate("schematicpreview.title.preview");
+        this.useTitleHierarchy = false;
     }
 
     @Override
-    protected void reAddActiveWidgets()
+    public void initGui()
     {
-        super.reAddActiveWidgets();
+        super.initGui();
 
-        this.widget = this.addWidget(new PreviewWidget(this.getX(), this.getY() + TOP_MARGIN,
-                                                        this.getScreenWidth(), this.getScreenHeight() - TOP_MARGIN, this.path));
+        ButtonGeneric save = new ButtonGeneric(2, 2, 18, 16, "",
+                StringUtils.translate("schematicpreview.button.save_screenshot"));
+        this.addButton(save, (button, mouseButton) -> this.capture(true));
 
-        this.saveButton = this.addWidget(GenericButton.create(BUTTON_SIZE, BUTTON_SIZE, SchematicPreviewIcons.SAVE));
-        this.saveButton.setRenderButtonBackgroundTexture(true);
-        this.saveButton.translateAndAddHoverString("schematicpreview.button.save_screenshot");
-        this.saveButton.setActionListener((mouseButton, w) -> {
-            this.onSave();
-            return true;
-        });
+        ButtonGeneric copy = new ButtonGeneric(22, 2, 18, 16, "",
+                StringUtils.translate("schematicpreview.button.copy_screenshot"));
+        this.addButton(copy, (button, mouseButton) -> this.capture(false));
 
-        this.copyButton = this.addWidget(GenericButton.create(BUTTON_SIZE, BUTTON_SIZE, SchematicPreviewIcons.COPY));
-        this.copyButton.setRenderButtonBackgroundTexture(true);
-        this.copyButton.translateAndAddHoverString("schematicpreview.button.copy_screenshot");
-        this.copyButton.setActionListener((mouseButton, w) -> {
-            this.onCopy();
-            return true;
-        });
+        ButtonGeneric freecam = new ButtonGeneric(42, 2, 18, 16, "",
+                StringUtils.translate("schematicpreview.button.freecam"));
+        this.addButton(freecam, (button, mouseButton) -> this.freecam = ! this.freecam);
 
-        this.positionButtons();
+        ButtonGeneric close = new ButtonGeneric(Math.max(64, this.width - 20), 2, 18, 16, "",
+                StringUtils.translate("malilib.gui.button.close"));
+        this.addButton(close, (button, mouseButton) -> this.closeGui(true));
     }
 
     @Override
-    protected void updateWidgetPositions()
+    protected void drawTitle(int mouseX, int mouseY, float partialTicks)
     {
-        super.updateWidgetPositions();
-
-        if (this.widget != null)
-        {
-            this.widget.setPositionAndSize(this.getX(), this.getY() + TOP_MARGIN,
-                                           this.getScreenWidth(), this.getScreenHeight() - TOP_MARGIN);
-        }
-
-        this.positionButtons();
+        // Leave room for the icon controls. The default hierarchy title is long enough to
+        // overlap them on the fullscreen screen.
+        this.drawString(this.title, 70, 10, COLOR_WHITE);
     }
 
-    private void positionButtons()
+    @Override
+    protected void drawContents(int mouseX, int mouseY, float partialTicks)
     {
-        if (this.saveButton != null)
+        this.updateCamera(mouseX, mouseY);
+
+        if (this.cameraInitialized)
         {
-            this.saveButton.setPosition(this.getX() + 2, this.getY() + 2);
+            PreviewCache.renderPreview(this.file, 4, TOP_MARGIN, this.width - 8, this.height - TOP_MARGIN - 4,
+                    this.yRot, this.xRot, this.distance,
+                    this.targetX, this.targetY, this.targetZ);
+        }
+        else
+        {
+            RenderUtils.drawOutlinedBox(4, TOP_MARGIN, this.width - 8, this.height - TOP_MARGIN - 4,
+                    0xA0000000, COLOR_HORIZONTAL_BAR);
+            String text = StringUtils.translate("schematicpreview.label.preview.loading");
+            this.drawString(text, this.width / 2 - this.getStringWidth(text) / 2,
+                    this.height / 2, COLOR_WHITE);
         }
 
-        if (this.copyButton != null)
+        PreviewIcons.SAVE.renderAt(5, 4, mouseX >= 2 && mouseX < 20 && mouseY >= 2 && mouseY < 18);
+        PreviewIcons.COPY.renderAt(25, 4, mouseX >= 22 && mouseX < 40 && mouseY >= 2 && mouseY < 18);
+        PreviewIcons.FREECAM.renderAt(45, 4, this.freecam || (mouseX >= 42 && mouseX < 60 && mouseY >= 2 && mouseY < 18));
+        int closeX = Math.max(64, this.width - 20);
+        PreviewIcons.CLOSE.renderAt(closeX + 3, 4,
+                mouseX >= closeX && mouseX < closeX + 18 && mouseY >= 2 && mouseY < 18);
+    }
+
+    private void updateCamera(int mouseX, int mouseY)
+    {
+        if (this.dragging)
         {
-            this.copyButton.setPosition(this.getX() + 2 + BUTTON_SIZE + 2, this.getY() + 2);
+            int dx = mouseX - this.dragX;
+            int dy = mouseY - this.dragY;
+            boolean rotating = (this.dragButton == 0) != this.freecam;
+
+            if (rotating)
+            {
+                this.yRot += dx * 0.5f;
+                this.xRot = (float) clamp(this.xRot - dy * 0.5f, -90.0, 90.0);
+            }
+            else
+            {
+                double scale = this.distance / 300.0;
+                double yaw = Math.toRadians(this.yRot);
+                this.targetX -= dx * Math.cos(yaw) * scale;
+                this.targetZ -= dx * Math.sin(yaw) * scale;
+                this.targetY += dy * scale;
+            }
+
+            this.dragX = mouseX;
+            this.dragY = mouseY;
+        }
+
+        if (this.cameraInitialized == false)
+        {
+            CompletableFuture<LitematicaSchematic> future = PreviewCache.getSchematic(this.file);
+
+            if (future.isDone())
+            {
+                LitematicaSchematic schematic = future.getNow(null);
+
+                if (schematic != null)
+                {
+                    PreviewRenderer renderer = PreviewCache.getRenderer(this.file, schematic);
+                    net.minecraft.util.math.Vec3d center = renderer.getCenter();
+                    this.targetX = center.x;
+                    this.targetY = center.y;
+                    this.targetZ = center.z;
+                    this.yRot = (float) Configs.Preview.PREVIEW_ROTATION_Y.getDoubleValue();
+                    this.xRot = (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue();
+                    this.distance = renderer.getDefaultDistance(Configs.Preview.PREVIEW_FOV.getDoubleValue(),
+                            (double) Math.max(1, this.width) / Math.max(1, this.height));
+                    this.cameraInitialized = true;
+                }
+            }
         }
     }
 
-    private void requestImage(Consumer<BufferedImage> onImage)
+    @Override
+    public boolean onMouseClicked(int mouseX, int mouseY, int mouseButton)
     {
-        if (this.widget == null)
+        // GuiBase dispatches ButtonGeneric actions from super.onMouseClicked().  This must
+        // happen before the camera drag handler, otherwise clicks on save/copy/close become
+        // camera drags and the clipboard button appears not to work.
+        if (super.onMouseClicked(mouseX, mouseY, mouseButton))
         {
-            MessageDispatcher.warning().translate("schematicpreview.message.preview_not_ready");
+            return true;
+        }
+
+        if (mouseButton == 0 || mouseButton == 1)
+        {
+            this.dragging = true;
+            this.dragButton = mouseButton;
+            this.dragX = mouseX;
+            this.dragY = mouseY;
+            return true;
+        }
+
+        return super.onMouseClicked(mouseX, mouseY, mouseButton);
+    }
+
+    @Override
+    public boolean onMouseReleased(int mouseX, int mouseY, int mouseButton)
+    {
+        this.dragging = false;
+        return super.onMouseReleased(mouseX, mouseY, mouseButton);
+    }
+
+    @Override
+    public boolean onMouseScrolled(int mouseX, int mouseY, double mouseWheelDelta)
+    {
+        if (this.cameraInitialized)
+        {
+            double factor = mouseWheelDelta < 0 ? 1.1 : 1.0 / 1.1;
+            this.distance = clamp(this.distance * factor, 1.5, 16384.0);
+            return true;
+        }
+
+        return super.onMouseScrolled(mouseX, mouseY, mouseWheelDelta);
+    }
+
+    private static double clamp(double value, double min, double max)
+    {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private void capture(boolean save)
+    {
+        if (this.cameraInitialized == false)
+        {
+            InfoUtils.showGuiOrInGameMessage(MessageType.WARNING, "schematicpreview.message.preview_not_ready");
             return;
         }
 
-        this.widget.requestCapture(image -> {
-            if (image == null)
+        int width = Math.max(1, this.width - 8);
+        int height = Math.max(1, this.height - TOP_MARGIN - 4);
+        java.awt.image.BufferedImage image = PreviewCache.capturePreview(this.file, width, height,
+                this.yRot, this.xRot, this.distance, this.targetX, this.targetY, this.targetZ);
+
+        if (image == null)
+        {
+            InfoUtils.showGuiOrInGameMessage(MessageType.WARNING, "schematicpreview.message.preview_not_ready");
+            return;
+        }
+
+        if (save)
+        {
+            File output = ScreenshotUtil.save(image, this.file);
+
+            if (output != null)
             {
-                MessageDispatcher.warning().translate("schematicpreview.message.preview_not_ready");
+                InfoUtils.showGuiOrInGameMessage(MessageType.SUCCESS,
+                        "schematicpreview.message.screenshot_saved", output.getName());
             }
             else
             {
-                onImage.accept(image);
+                InfoUtils.showGuiOrInGameMessage(MessageType.ERROR, "schematicpreview.message.screenshot_failed");
             }
-        });
-    }
-
-    private void onSave()
-    {
-        this.requestImage(image -> {
-            File file = ScreenshotUtil.save(image, this.path);
-
-            if (file != null)
-            {
-                MessageDispatcher.success().translate("schematicpreview.message.screenshot_saved", file.getName());
-            }
-            else
-            {
-                MessageDispatcher.error().translate("schematicpreview.message.screenshot_failed");
-            }
-        });
-    }
-
-    private void onCopy()
-    {
-        this.requestImage(image -> {
-            if (ScreenshotUtil.copyToClipboard(image))
-            {
-                MessageDispatcher.success().translate("schematicpreview.message.image_copied");
-            }
-            else
-            {
-                MessageDispatcher.error().translate("schematicpreview.message.screenshot_failed");
-            }
-        });
+        }
+        else if (ScreenshotUtil.copyToClipboard(image))
+        {
+            InfoUtils.showGuiOrInGameMessage(MessageType.SUCCESS, "schematicpreview.message.image_copied");
+        }
+        else
+        {
+            InfoUtils.showGuiOrInGameMessage(MessageType.ERROR, "schematicpreview.message.image_copy_failed");
+        }
     }
 
     @Override
-    public void onGuiClosed()
+    public void removed()
     {
-        if (this.widget != null)
-        {
-            this.widget.close();
-        }
-
-        super.onGuiClosed();
+        PreviewCache.close();
+        super.removed();
     }
 }

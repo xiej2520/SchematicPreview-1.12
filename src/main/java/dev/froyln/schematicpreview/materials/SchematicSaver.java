@@ -1,84 +1,85 @@
 package dev.froyln.schematicpreview.materials;
 
-import java.nio.file.Path;
-import javax.annotation.Nullable;
+import java.io.File;
 
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.ConfirmActionScreen;
-import fi.dy.masa.malilib.gui.TextInputScreen;
-import fi.dy.masa.malilib.gui.util.GuiUtils;
-import fi.dy.masa.malilib.util.FileNameUtils;
-import fi.dy.masa.malilib.overlay.message.MessageDispatcher;
+import fi.dy.masa.litematica.schematic.LitematicaSchematic;
+import fi.dy.masa.malilib.gui.GuiBase;
+import fi.dy.masa.malilib.gui.GuiConfirmAction;
+import fi.dy.masa.malilib.gui.GuiTextInput;
+import fi.dy.masa.malilib.interfaces.IConfirmationListener;
+import fi.dy.masa.malilib.gui.Message.MessageType;
+import fi.dy.masa.malilib.util.InfoUtils;
+import fi.dy.masa.malilib.util.GuiUtils;
 
-import dev.froyln.schematicpreview.gui.PopupScreenCompat;
 import dev.froyln.schematicpreview.render.PreviewCache;
 
-/**
- * "Save" / "Save as" for a schematic read straight from disk for a material list, so Replace
- * edits can be written back. Only schematics with a backing file can be saved.
- */
+/** Save and Save As for schematic-backed material lists. */
 public final class SchematicSaver
 {
     private SchematicSaver()
     {
     }
 
-    /**
-     * Opens a confirm dialog, then overwrites {@code schematic}'s own file on confirm.
-     */
-    public static void save(ISchematic schematic)
+    public static void save(LitematicaSchematic schematic)
     {
-        Path file = schematic.getFile();
-        String name = file.getFileName().toString();
+        File file = schematic.getFile();
 
-        ConfirmActionScreen screen = new ConfirmActionScreen(280,
-                "schematicpreview.gui.save_schematic.confirm_title",
-                () -> overwrite(schematic, file, name),
-                "schematicpreview.gui.save_schematic.confirm_message", name);
-        screen.setParent(GuiUtils.getCurrentScreen());
-        BaseScreen.openScreen(PopupScreenCompat.keepPopupSize(screen));
-    }
-
-    /**
-     * Opens a text input pre-filled with a "_replaced" suggestion and writes a new file next to
-     * the source; Litematica's {@code writeToFile} refuses an existing name itself.
-     */
-    public static void saveAs(ISchematic schematic)
-    {
-        Path dir = schematic.getFile().getParent();
-        String defaultName = FileNameUtils.getFileNameWithoutExtension(schematic.getFile().getFileName().toString()) + "_replaced";
-
-        BaseScreen.openScreenWithParent(PopupScreenCompat.keepPopupSize(
-                new TextInputScreen("schematicpreview.gui.save_schematic_as.title",
-                                    defaultName, (name) -> writeAs(schematic, dir, name))));
-    }
-
-    private static void overwrite(ISchematic schematic, Path file, String name)
-    {
-        if (schematic.writeToFile(file, true))
+        if (file == null)
         {
-            schematic.getMetadata().clearModifiedSinceSaved();
-            PreviewCache.invalidate(file);
-            MessageDispatcher.success().translate("schematicpreview.message.schematic_saved", name);
-        }
-    }
-
-    private static boolean writeAs(ISchematic schematic, Path dir, String name)
-    {
-        if (name.trim().isEmpty())
-        {
-            return false;
+            return;
         }
 
-        boolean success = schematic.writeToFile(dir, name, false);
-
-        if (success)
+        GuiConfirmAction confirm = new GuiConfirmAction(280,
+                "schematicpreview.gui.save_schematic.confirm_title", new IConfirmationListener()
         {
-            PreviewCache.invalidateDirectory(dir);
-            MessageDispatcher.success().translate("schematicpreview.message.schematic_saved", name);
+            @Override
+            public boolean onActionConfirmed()
+            {
+                if (schematic.writeToFile(file.getParentFile(), file.getName(), true))
+                {
+                    schematic.getMetadata().clearModifiedSinceSaved();
+                    PreviewCache.invalidate(file);
+                    InfoUtils.showGuiOrInGameMessage(MessageType.SUCCESS, "schematicpreview.message.schematic_saved", file.getName());
+                }
+
+                return true;
+            }
+
+            @Override
+            public boolean onActionCancelled()
+            {
+                return true;
+            }
+        }, GuiUtils.getCurrentScreen(), "schematicpreview.gui.save_schematic.confirm_message", file.getName());
+        GuiBase.openGui(confirm);
+    }
+
+    public static void saveAs(LitematicaSchematic schematic)
+    {
+        File source = schematic.getFile();
+
+        if (source == null)
+        {
+            return;
         }
 
-        return success;
+        String name = source.getName();
+
+        if (name.endsWith(LitematicaSchematic.FILE_EXTENSION))
+        {
+            name = name.substring(0, name.length() - LitematicaSchematic.FILE_EXTENSION.length());
+        }
+
+        GuiTextInput input = new GuiTextInput(128, "schematicpreview.gui.save_schematic_as.title",
+                name + "_replaced", GuiUtils.getCurrentScreen(), value -> {
+                    String trimmed = value.trim();
+
+                    if (trimmed.isEmpty() == false && schematic.writeToFile(source.getParentFile(), trimmed, false))
+                    {
+                        PreviewCache.invalidateDirectory(source.getParentFile());
+                        InfoUtils.showGuiOrInGameMessage(MessageType.SUCCESS, "schematicpreview.message.schematic_saved", trimmed);
+                    }
+                });
+        GuiBase.openGui(input);
     }
 }

@@ -1,88 +1,77 @@
 package dev.froyln.schematicpreview.gui;
 
-import java.util.Collection;
+import javax.annotation.Nullable;
 
-import net.minecraft.block.Block;
-import net.minecraft.item.ItemStack;
-
-import fi.dy.masa.litematica.gui.widget.list.entry.MaterialListEntryWidget;
 import fi.dy.masa.litematica.materials.MaterialListBase;
 import fi.dy.masa.litematica.materials.MaterialListEntry;
 import fi.dy.masa.litematica.materials.MaterialListPlacement;
 import fi.dy.masa.litematica.materials.MaterialListSchematic;
-import fi.dy.masa.litematica.schematic.ISchematic;
-import fi.dy.masa.malilib.gui.BaseScreen;
-import fi.dy.masa.malilib.gui.widget.button.GenericButton;
-import fi.dy.masa.malilib.gui.widget.list.entry.DataListEntryWidgetData;
-import fi.dy.masa.malilib.overlay.message.MessageDispatcher;
+import fi.dy.masa.litematica.schematic.LitematicaSchematic;
+import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
+import fi.dy.masa.litematica.gui.widgets.WidgetListMaterialList;
+import fi.dy.masa.litematica.gui.widgets.WidgetMaterialListEntry;
+import fi.dy.masa.malilib.gui.GuiBase;
+import fi.dy.masa.malilib.gui.button.ButtonBase;
+import fi.dy.masa.malilib.gui.button.ButtonGeneric;
+import fi.dy.masa.malilib.gui.button.IButtonActionListener;
+import fi.dy.masa.malilib.util.StringUtils;
 
 import dev.froyln.schematicpreview.materials.BlockReplacer;
-import dev.froyln.schematicpreview.materials.MaterialListAccessors;
+import dev.froyln.schematicpreview.mixin.MaterialListPlacementAccessor;
+import dev.froyln.schematicpreview.mixin.MaterialListSchematicAccessor;
 
-/**
- * {@code MaterialListEntryWidget} plus a Replace button that swaps every block of this row's
- * type, in the schematic backing the material list, for a block picked from
- * {@link BlockSelectScreen}.
- */
-public class ReplaceMaterialListEntryWidget extends MaterialListEntryWidget
+/** Adds a small block-id replacement action to schematic-backed material rows. */
+public class ReplaceMaterialListEntryWidget extends WidgetMaterialListEntry
 {
-    private final GenericButton replaceButton;
+    private final MaterialListBase materialList;
+    @Nullable private final MaterialListEntry entry;
 
-    public ReplaceMaterialListEntryWidget(MaterialListEntry data, DataListEntryWidgetData constructData, MaterialListBase materialList)
+    public ReplaceMaterialListEntryWidget(int x, int y, int width, int height, boolean isOdd,
+            MaterialListBase materialList, @Nullable MaterialListEntry entry, int listIndex,
+            WidgetListMaterialList listWidget)
     {
-        super(data, constructData, materialList);
+        super(x, y, width, height, isOdd, materialList, entry, listIndex, listWidget);
+        this.materialList = materialList;
+        this.entry = entry;
 
-        this.replaceButton = GenericButton.create(18, "schematicpreview.gui.replace_block", this::openBlockSelect);
+        if (entry != null)
+        {
+            ButtonGeneric button = new ButtonGeneric(x + width - 62, y + 1, -1, true,
+                    StringUtils.translate("schematicpreview.gui.replace_block"));
+            this.addButton(button, new ReplaceAction());
+        }
     }
 
-    @Override
-    public void reAddSubWidgets()
+    private final class ReplaceAction implements IButtonActionListener
     {
-        super.reAddSubWidgets();
+        @Override
+        public void actionPerformedWithButton(ButtonBase button, int mouseButton)
+        {
+            if (entry == null)
+            {
+                return;
+            }
 
-        this.addWidget(this.replaceButton);
+            GuiBase.openGui(new BlockSelectScreen("schematicpreview.gui.replace_block.title",
+                    ReplaceMaterialListEntryWidget.this::replace).setParent(ReplaceMaterialListEntryWidget.this.mc.currentScreen));
+        }
     }
 
-    @Override
-    public void updateSubWidgetPositions()
+    private void replace(net.minecraft.item.ItemStack newStack)
     {
-        super.updateSubWidgetPositions();
-
-        this.replaceButton.setRight(this.ignoreButton.getX() - 2);
-        this.replaceButton.centerVerticallyInside(this);
-    }
-
-    private void openBlockSelect()
-    {
-        ItemStack oldStack = this.data.getStack();
-
-        BaseScreen.openScreenWithParent(new BlockSelectScreen("schematicpreview.gui.replace_block.title",
-                oldStack.getDisplayName(), (newStack) -> this.replaceWith(oldStack, newStack)));
-    }
-
-    private void replaceWith(ItemStack oldStack, ItemStack newStack)
-    {
-        ISchematic schematic;
-        Collection<String> regionNames;
-
         if (this.materialList instanceof MaterialListSchematic)
         {
-            MaterialListSchematic list = (MaterialListSchematic) this.materialList;
-            schematic = MaterialListAccessors.getSchematic(list);
-            regionNames = MaterialListAccessors.getRegions(list);
+            MaterialListSchematicAccessor accessor = (MaterialListSchematicAccessor) this.materialList;
+            LitematicaSchematic schematic = accessor.schematicpreview$getSchematic();
+            BlockReplacer.replace(this.entry.getStack(), newStack, schematic, accessor.schematicpreview$getRegions());
+            this.materialList.reCreateMaterialList();
         }
-        else
+        else if (this.materialList instanceof MaterialListPlacement)
         {
-            schematic = MaterialListAccessors.getSchematic((MaterialListPlacement) this.materialList);
-            regionNames = schematic.getRegionNames();
+            SchematicPlacement placement = ((MaterialListPlacementAccessor) this.materialList).schematicpreview$getPlacement();
+            LitematicaSchematic schematic = placement.getSchematic();
+            BlockReplacer.replace(this.entry.getStack(), newStack, schematic, schematic.getAreaPositions().keySet());
+            this.materialList.reCreateMaterialList();
         }
-
-        Block newBlock = Block.getBlockFromItem(newStack.getItem());
-        long count = BlockReplacer.replace(oldStack, newBlock, newStack.getMetadata(), schematic, regionNames);
-
-        this.materialList.reCreateMaterialList();
-        this.listWidget.refreshEntries();
-
-        MessageDispatcher.success().translate("schematicpreview.gui.replace_block.result", count, newStack.getDisplayName());
     }
 }

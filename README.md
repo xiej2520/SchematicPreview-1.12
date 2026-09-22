@@ -1,94 +1,79 @@
-# SchematicPreview for LiteLoader 1.12.2
+# SchematicPreview — Fabric 1.15.2
 
-A [Litematica](https://github.com/maruohon/litematica) addon for Minecraft 1.12.2 /
-[LiteLoader](https://www.liteloader.com/) that brings the features of the Fabric mod
-[DimasKama/SchematicPreview](https://github.com/DimasKama/SchematicPreview) to 1.12.2,
-re-implemented from scratch:
+SchematicPreview adds live 3D previews to Litematica's 1.15.2 schematic browser. This branch
+targets the Fabric 1.15.2 ports of MaLiLib and Litematica in the sibling repositories.
 
-- **Schematic previews** — live 3D preview of the selected schematic in the browser side
-  panel (drag to rotate, scroll to zoom, fullscreen and free-camera modes) and small previews
-  per entry in list or 3/4/5-column tile layouts.
-- **Directory icons** — right-click a folder to give it any item as icon.
-- **Replace button** in the material list — swap every block of one type in the schematic.
+Implemented features:
 
-- **Save / Save as** in the material list — write a schematic edited with Replace back to
-  disk (overwrite or new file) without loading or placing it first.
-- **Open schematics folder** button in Litematica's main menu — opens the schematics
-  directory in your file manager.
+- cached, incremental 3D previews in the browser side panel and list/tile entries;
+- orbit, pan, zoom, double-click full-screen viewing, and a preview-type control;
+- per-directory item icons, persisted in `config/schematicpreview_icons.json`;
+- schematic-backed material-list replacement with shared block-state properties preserved;
+- Save and Save As for edited schematic-backed material lists;
+- a client-thread renderer using 1.15.2 `BufferBuilder`, `VertexBuffer`, `RenderLayer`, and
+  `Framebuffer` APIs.
 
-## Screenshots
+Block entities are rendered through a temporary Litematica schematic world, so stateful renderers
+such as chests and shulker boxes can resolve neighboring block states and saved NBT. Their NBT is
+removed only when a replacement changes the block at that position.
 
-<!-- Drop PNGs into docs/images/ with these names; the table renders once they exist. -->
+## Requirements
 
-| Browser side panel | Fullscreen preview |
+| Component | Version |
 |---|---|
-| ![side panel](docs/images/side-panel.png) | ![fullscreen](docs/images/fullscreen.png) |
+| Minecraft | 1.15.2 |
+| Fabric Loader | 0.16.14 |
+| MaLiLib | 0.18.4+xiej.0 |
+| Litematica | 0.9.1-1.15.2-dev+xiej.8 |
+| Java | 8 for the target game/toolchain |
 
-| Material list with Replace / Save / Save as |
-|---|
-| ![replace](docs/images/replace.png) |
+The default build resolves local development jars when these files exist:
 
-<!-- Wanted: docs/images/tiles.png — the browser in a tile layout (preview-type button). -->
-
-## Usage
-
-- **Config screen:** `Right Shift + F8` (rebindable) or LiteLoader's mod panel. Tabs Generic /
-  Menu / Preview / Hotkeys.
-- **Preview:** select a schematic in any Litematica browser. Drag = rotate, scroll = zoom,
-  the two buttons in the preview's corner open **fullscreen** and toggle **freecam** (in
-  freecam, drag pans instead of orbiting). Fullscreen has **Save PNG** and **Copy** buttons
-  (Wayland desktops need `wl-copy` on PATH for Copy).
-- **Preview type:** the grid button next to the browser's path bar cycles List / List preview /
-  Tile 5 / 4 / 3 columns (right-click cycles backwards). Tile and list previews are skipped for
-  schematics above `previewMaxVolume` blocks (default 125 000).
-- **Directory icons:** right-click a folder's icon in the browser, type an item id
-  (`minecraft:diamond_block`), pick a position. Stored in `config/schematicpreview_icons.json`.
-- **Replace:** open a material list (browser → *Material list*, or Loaded Schematics), click
-  **Replace** on a row, pick a block. Keeps orientation properties the two blocks share.
-- **Save / Save as:** in a schematic-backed material list, next to *Export*. *Save* overwrites
-  the file after a confirmation; *Save as* asks for a name and never overwrites.
-- **Open schematics folder:** in Litematica's main menu, under *Configuration menu*. Opens
-  the folder Litematica loads schematics from (`schematics/` in the game directory).
-
-Design notes: `AGENTS.md`, `docs/port-design.md`.
-
-## Requirements (runtime)
-
-| Mod | Version |
-|-----|---------|
-| Minecraft | 1.12.2 |
-| LiteLoader | 1.12.2 |
-| MaLiLib (LiteLoader) | 0.53.0 or 0.54.0 |
-| Litematica (LiteLoader) | 0.31.4 |
-
-MaLiLib and Litematica for 1.12.2 are on [masa's download page](https://masa.dy.fi/mcmods/client_mods/?mcver=1.12.2),
-[Modrinth](https://modrinth.com/mod/litematica/version/0.31.4) and CurseForge.
-
-## Building
-
-Toolchain is the same as Litematica 1.12.2: ForgeGradle 2.3 + Gradle 2.14.1 wrapper, **JDK 8**.
-
-```bash
-python3 tools/setup-build-deps.py    # once: fetches a pinned JDK 8 into .jdk-cache/ and
-                                      # litematica's .litemod (repacked) into libs/
-export JAVA_HOME=$PWD/.jdk-cache/jdk8u302-b08
-
-./gradlew build                  # first run is slow: downloads + deobfuscates MC 1.12.2
-                                  # → build/libs/schematicpreview-liteloader-1.12.2-<version>.litemod
-./gradlew runClient              # dev client, run dir ./minecraft
+```text
+../malilib/build/devlibs/malilib-fabric-1.15.2-0.18.4+xiej.0-dev.jar
+../litematica/build/devlibs/litematica-fabric-1.15.2-0.9.1-1.15.2-dev+xiej.8-dev.jar
 ```
 
-**Use the pinned JDK, not your system's JDK 8** if it's a recent build (8u402+): ForgeGradle
-2.3's deobfuscator hits a real `java.util.zip.ZipException` on newer JDK 8 point releases.
-See `AGENTS.md` → Gotchas for why, and `tools/setup-build-deps.py` for the fix.
+## Build
 
-Litematica LiteLoader isn't published to a Maven repo, hence the script — it downloads
-`litematica-liteloader-1.12.2-<version>.litemod` from
-[masa's mod page](https://masa.dy.fi/mcmods/litematica/) and repacks it. Alternative: build
-Litematica from source (`maruohon/litematica`, branch `liteloader_1.12.2`, commit `1db931a6`)
-and publish it to your local Maven.
+With Nix:
 
-## License
+```bash
+nix develop
+gradle build
+gradle runClient
+```
 
-[LGPL-3.0](LICENSE), same as Litematica and MaLiLib. This is a clean-room reimplementation:
-the original Fabric mod is "All rights reserved" and no code or assets from it are used here.
+Without Nix, use a Java 8 toolchain and the pinned Gradle executable available in the project
+environment:
+
+```bash
+GRADLE_USER_HOME=/tmp/schematicpreview-gradle gradle build
+```
+
+`gradle build` is the required non-GUI verification. `runClient` also needs a working OpenGL
+display. The build includes the three Fabric API modules required by the 1.15 MaLiLib runtime and
+forces the configured Fabric Loader version so the old 1.15 Fabric API POM cannot introduce a
+second loader jar.
+
+## Controls
+
+- Select a schematic to load its side-panel preview.
+- Drag with the left mouse button to orbit; drag with the right button to pan; scroll to zoom.
+- Double-click the side-panel preview for the full-screen viewer.
+- Click the preview-type control in the browser navigation area to cycle list, list-preview, and
+  tile layouts; right-click cycles backward through the option in the config UI.
+- Right-click a directory icon to edit its item id and icon position.
+- Open a schematic-backed material list to use Replace, Save, and Save As.
+
+## Repository layout
+
+- `src/main/java/dev/froyln/schematicpreview/render/` — schematic view, incremental tessellation,
+  shared renderer and framebuffer cache.
+- `src/main/java/dev/froyln/schematicpreview/gui/` — browser, directory-icon, full-screen, and
+  material-list UI.
+- `src/main/java/dev/froyln/schematicpreview/mixin/` — Litematica browser/material-list hooks.
+- `flake.nix` — reproducible Java/Gradle/native-library development shell.
+
+This is a clean-room implementation. It uses the 1.15.2 MaLiLib/Litematica APIs and does not copy
+code from the original Fabric mod.

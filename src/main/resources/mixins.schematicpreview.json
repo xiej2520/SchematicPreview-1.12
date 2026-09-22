@@ -1,21 +1,16 @@
 {
-	"required": true,
-	"package": "dev.froyln.schematicpreview.mixin",
-	"compatibilityLevel": "JAVA_8",
-	"refmap": "mixins.schematicpreview.refmap.json",
-	"minVersion": "0.7",
-	"client": [
-		"SchematicInfoWidgetMixin",
-		"BaseSchematicBrowserScreenMixin",
-		"BaseFileBrowserWidgetAccessor",
-		"BaseListWidgetAccessor",
-		"MaterialListScreenMixin",
-		"MaterialListSchematicAccessor",
-		"MaterialListPlacementAccessor",
-		"LitematicaBlockStateContainerFullAccessor",
-		"MainMenuScreenMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	}
+    "required": true,
+    "package": "dev.froyln.schematicpreview.mixin",
+    "compatibilityLevel": "JAVA_8",
+    "minVersion": "0.8",
+    "client": [
+        "GuiSchematicBrowserBaseMixin",
+        "GuiMaterialListMixin",
+        "GuiMainMenuMixin",
+        "MaterialListSchematicAccessor",
+        "MaterialListPlacementAccessor"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
 }
