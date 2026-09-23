@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.Project;
 
@@ -37,6 +39,8 @@ import litematica.schematic.Schematic;
  */
 public class PreviewRenderer
 {
+    private static final Logger LOGGER = LogManager.getLogger("SchematicPreview");
+
     // ponytail: fixed per-tick tessellation budget, not configurable - revisit if a huge
     // schematic visibly stalls the side panel in testing.
     private static final int TESSELLATE_BUDGET_PER_TICK = 4096;
@@ -50,6 +54,7 @@ public class PreviewRenderer
     private long cursor;
     private long totalVolume;
     private boolean tessellationDone;
+    private boolean failed;
 
     private final EnumMap<BlockRenderLayer, BufferBuilder> buildingBuffers = new EnumMap<>(BlockRenderLayer.class);
     private final EnumMap<BlockRenderLayer, VertexBuffer> vbos = new EnumMap<>(BlockRenderLayer.class);
@@ -63,11 +68,17 @@ public class PreviewRenderer
         this.totalVolume = (long) size.getX() * size.getY() * size.getZ();
         this.cursor = 0;
         this.tessellationDone = this.totalVolume <= 0;
+        this.failed = false;
     }
 
     public boolean isTessellationDone()
     {
         return this.tessellationDone;
+    }
+
+    public boolean hasFailed()
+    {
+        return this.failed;
     }
 
     public net.minecraft.util.math.Vec3d getCenter()
@@ -106,6 +117,23 @@ public class PreviewRenderer
             return;
         }
 
+        try
+        {
+            this.tickInternal();
+        }
+        catch (Throwable t)
+        {
+            // A malformed block model or an oversized fluid buffer must invalidate only this
+            // preview. Letting it escape leaves the screen/world render loop in a broken state.
+            this.failed = true;
+            this.tessellationDone = true;
+            this.discardBuildingBuffers();
+            LOGGER.warn("Could not tessellate schematic preview", t);
+        }
+    }
+
+    private void tickInternal()
+    {
         Minecraft mc = Minecraft.getMinecraft();
         BlockRendererDispatcher dispatcher = mc.getBlockRendererDispatcher();
         Vec3i size = this.access.getBoxSize();
@@ -150,6 +178,24 @@ public class PreviewRenderer
         }
     }
 
+    private void discardBuildingBuffers()
+    {
+        for (BufferBuilder buffer : this.buildingBuffers.values())
+        {
+            try
+            {
+                buffer.finishDrawing();
+            }
+            catch (IllegalStateException ignored)
+            {
+            }
+
+            buffer.reset();
+        }
+
+        this.buildingBuffers.clear();
+    }
+
     private void upload()
     {
         for (Map.Entry<BlockRenderLayer, BufferBuilder> entry : this.buildingBuffers.entrySet())
@@ -185,96 +231,132 @@ public class PreviewRenderer
         // current camera distance and the schematic's bounding sphere.
         double farClip = Math.max(16.0, Math.max(diagonal * 4.0, distance + diagonal * 2.0));
 
-        GlStateManager.matrixMode(GL11.GL_PROJECTION);
-        GlStateManager.pushMatrix();
-        GlStateManager.loadIdentity();
-        Project.gluPerspective((float) fov, (float) width / (float) height, 0.05f, (float) farClip);
+        int projectionStackDepth = GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH);
+        int modelViewStackDepth = GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH);
+        int textureStackDepth = GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH);
 
-        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
-        GlStateManager.pushMatrix();
-        GlStateManager.loadIdentity();
-        GlStateManager.translate(0.0, 0.0, -distance);
-        GlStateManager.rotate(xRot, 1f, 0f, 0f);
-        GlStateManager.rotate(yRot, 0f, 1f, 0f);
-        GlStateManager.translate(-targetX, -targetY, -targetZ);
-
-        // Pin every GL state this depends on; callers (GUI frame, capture) leave arbitrary state.
-        GlStateManager.disableFog();
-        GlStateManager.disableColorMaterial();
-        GlStateManager.disableRescaleNormal();
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.S);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.T);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.R);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.Q);
-        GlStateManager.colorMask(true, true, true, true);
-        GlStateManager.depthFunc(GL11.GL_LEQUAL);
-        GlStateManager.disableBlend();
-        GlStateManager.enableAlpha();
-        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f);
-        RenderHelper.disableStandardItemLighting();
-        GlStateManager.enableDepth();
-        GlStateManager.depthMask(true);
-        GlStateManager.enableCull();
-        GlStateManager.enableTexture2D();
-        GlStateManager.color(1f, 1f, 1f, 1f);
-        Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-
-        // Tile entity renderers sample the lightmap unit unconditionally; a 1x1 white texture
-        // there is the full-bright identity. Must switch units via GlStateManager (it caches
-        // per-unit state), never the raw OpenGlHelper.setActiveTexture - see AGENTS.md Gotchas.
-        GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-        GlStateManager.enableTexture2D();
-        GlStateManager.bindTexture(getFullBrightLightmapTexture());
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240f, 240f);
-        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-
-        this.drawLayer(BlockRenderLayer.SOLID);
-        this.drawLayer(BlockRenderLayer.CUTOUT_MIPPED);
-        this.drawLayer(BlockRenderLayer.CUTOUT);
-
-        GlStateManager.enableBlend();
-        // Alpha factors composite ("over"); (ONE, ZERO) would overwrite an opaque block's alpha
-        // on a transparent capture.
-        GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                                            GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        GlStateManager.depthMask(false);
-        this.drawLayer(BlockRenderLayer.TRANSLUCENT);
-        GlStateManager.depthMask(true);
-        GlStateManager.disableBlend();
-
-        // Tile entity models take the current color; drawLayer() invalidated the cache.
-        GlStateManager.color(1f, 1f, 1f, 1f);
-
-        if (renderTileEntities)
+        try
         {
-            this.drawTileEntities();
+            GlStateManager.matrixMode(GL11.GL_PROJECTION);
+            GlStateManager.pushMatrix();
+            GlStateManager.loadIdentity();
+            Project.gluPerspective((float) fov, (float) width / (float) height, 0.05f, (float) farClip);
+
+            GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+            GlStateManager.pushMatrix();
+            GlStateManager.loadIdentity();
+            GlStateManager.translate(0.0, 0.0, -distance);
+            GlStateManager.rotate(xRot, 1f, 0f, 0f);
+            GlStateManager.rotate(yRot, 0f, 1f, 0f);
+            GlStateManager.translate(-targetX, -targetY, -targetZ);
+
+            // Pin every GL state this depends on; callers (GUI frame, capture) leave arbitrary state.
+            GlStateManager.disableFog();
+            GlStateManager.disableColorMaterial();
+            GlStateManager.disableRescaleNormal();
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.S);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.T);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.R);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.Q);
+            GlStateManager.colorMask(true, true, true, true);
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.disableBlend();
+            GlStateManager.enableAlpha();
+            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f);
+            RenderHelper.disableStandardItemLighting();
+            GlStateManager.enableDepth();
+            GlStateManager.depthMask(true);
+            GlStateManager.enableCull();
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(1f, 1f, 1f, 1f);
+            Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+
+            // Tile entity renderers sample the lightmap unit unconditionally; a 1x1 white texture
+            // there is the full-bright identity. Must switch units via GlStateManager (it caches
+            // per-unit state), never the raw OpenGlHelper.setActiveTexture - see AGENTS.md Gotchas.
+            GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+            GlStateManager.enableTexture2D();
+            GlStateManager.bindTexture(getFullBrightLightmapTexture());
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240f, 240f);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+
+            this.drawLayer(BlockRenderLayer.SOLID);
+            this.drawLayer(BlockRenderLayer.CUTOUT_MIPPED);
+            this.drawLayer(BlockRenderLayer.CUTOUT);
+
+            GlStateManager.enableBlend();
+            // Alpha factors composite ("over"); (ONE, ZERO) would overwrite an opaque block's alpha
+            // on a transparent capture.
+            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                                                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            GlStateManager.depthMask(false);
+            this.drawLayer(BlockRenderLayer.TRANSLUCENT);
+            GlStateManager.depthMask(true);
+            GlStateManager.disableBlend();
+
+            // Tile entity models take the current color; drawLayer() invalidated the cache.
+            GlStateManager.color(1f, 1f, 1f, 1f);
+
+            if (renderTileEntities)
+            {
+                this.drawTileEntities();
+            }
         }
+        finally
+        {
+            // Tile entity renderers (end portal especially) leave lighting/blend/texgen changed.
+            GlStateManager.disableLighting();
+            GlStateManager.disableRescaleNormal();
+            GlStateManager.disableBlend();
+            GlStateManager.disableAlpha();
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.S);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.T);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.R);
+            GlStateManager.disableTexGenCoord(GlStateManager.TexGen.Q);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            GlStateManager.enableTexture2D();
+            Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
 
-        // Tile entity renderers (end portal especially) leave lighting/blend/texgen changed.
-        GlStateManager.disableLighting();
-        GlStateManager.disableRescaleNormal();
-        GlStateManager.disableBlend();
-        GlStateManager.disableAlpha();
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.S);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.T);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.R);
-        GlStateManager.disableTexGenCoord(GlStateManager.TexGen.Q);
-        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
-        GlStateManager.enableTexture2D();
-        Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+            GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+            GlStateManager.disableTexture2D();
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
 
-        GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-        GlStateManager.disableTexture2D();
-        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            GlStateManager.disableCull();
+            GlStateManager.disableDepth();
+            GlStateManager.color(1f, 1f, 1f, 1f);
+            OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
+            this.disableClientVertexArrays();
 
-        GlStateManager.disableCull();
-        GlStateManager.disableDepth();
-        GlStateManager.color(1f, 1f, 1f, 1f);
+            GlStateManager.matrixMode(GL11.GL_TEXTURE);
+            while (GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH) > textureStackDepth)
+            {
+                GlStateManager.popMatrix();
+            }
 
-        GlStateManager.matrixMode(GL11.GL_PROJECTION);
-        GlStateManager.popMatrix();
-        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
-        GlStateManager.popMatrix();
+            GlStateManager.matrixMode(GL11.GL_PROJECTION);
+            while (GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH) > projectionStackDepth)
+            {
+                GlStateManager.popMatrix();
+            }
+
+            GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+            OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit);
+            while (GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH) > modelViewStackDepth)
+            {
+                GlStateManager.popMatrix();
+            }
+        }
+    }
+
+    private void disableClientVertexArrays()
+    {
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.glDisableClientState(GL11.GL_VERTEX_ARRAY);
+        GlStateManager.glDisableClientState(GL11.GL_COLOR_ARRAY);
+        GlStateManager.glDisableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.lightmapTexUnit);
+        GlStateManager.glDisableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
+        OpenGlHelper.setClientActiveTexture(OpenGlHelper.defaultTexUnit);
     }
 
     // Created once, never deleted: one 1x1 texture for the mod's lifetime.
@@ -412,12 +494,7 @@ public class PreviewRenderer
 
     public void close()
     {
-        for (BufferBuilder buffer : this.buildingBuffers.values())
-        {
-            buffer.finishDrawing();
-        }
-
-        this.buildingBuffers.clear();
+        this.discardBuildingBuffers();
 
         for (VertexBuffer vbo : this.vbos.values())
         {

@@ -13,9 +13,12 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import javax.annotation.Nullable;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.math.Vec3d;
 
@@ -31,6 +34,8 @@ import litematica.schematic.SchematicRegion;
  */
 public final class PreviewCache
 {
+    private static final Logger LOGGER = LogManager.getLogger("SchematicPreview");
+
     private static final Executor LOADER = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "SchematicPreview-Loader");
         thread.setDaemon(true);
@@ -144,43 +149,57 @@ public final class PreviewCache
             return false;
         }
 
-        PreviewRenderer renderer = getRenderer(file, schematic);
-
-        renderer.tick();
-
-        if (renderer.isTessellationDone() == false)
+        try
         {
-            return false;
-        }
+            PreviewRenderer renderer = getRenderer(file, schematic);
 
-        if (smallFbo == null || smallFbo.framebufferWidth < width || smallFbo.framebufferHeight < height)
-        {
-            int newWidth = Math.max(width, smallFbo == null ? 0 : smallFbo.framebufferWidth);
-            int newHeight = Math.max(height, smallFbo == null ? 0 : smallFbo.framebufferHeight);
+            renderer.tick();
 
-            if (smallFbo != null)
+            if (renderer.isTessellationDone() == false || renderer.hasFailed())
             {
-                smallFbo.deleteFramebuffer();
+                return false;
             }
 
-            smallFbo = new Framebuffer(newWidth, newHeight, true);
-            smallFbo.setFramebufferFilter(GL11.GL_NEAREST);
+            int scale = new ScaledResolution(Minecraft.getMinecraft()).getScaleFactor();
+            int renderWidth = Math.max(1, width * scale);
+            int renderHeight = Math.max(1, height * scale);
+
+            if (smallFbo == null || smallFbo.framebufferWidth < renderWidth || smallFbo.framebufferHeight < renderHeight)
+            {
+                int newWidth = Math.max(renderWidth, smallFbo == null ? 0 : smallFbo.framebufferWidth);
+                int newHeight = Math.max(renderHeight, smallFbo == null ? 0 : smallFbo.framebufferHeight);
+
+                if (smallFbo != null)
+                {
+                    smallFbo.deleteFramebuffer();
+                }
+
+                smallFbo = new Framebuffer(newWidth, newHeight, true);
+                smallFbo.setFramebufferFilter(GL11.GL_NEAREST);
+            }
+
+            smallFbo.bindFramebuffer(true);
+
+            Vec3d center = renderer.getCenter();
+            float yRot = (float) Configs.Preview.PREVIEW_ROTATION_Y.getDoubleValue();
+            float xRot = (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue();
+            double fov = Configs.Preview.PREVIEW_FOV.getDoubleValue();
+            renderer.draw(renderWidth, renderHeight, fov, yRot, xRot, renderer.getDefaultDistance(fov, (double) renderWidth / renderHeight),
+                          center.x, center.y, center.z, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
+
+            Minecraft.getMinecraft().getFramebuffer().bindFramebuffer(true);
+            PreviewRenderUtils.blitFramebuffer(smallFbo, x, y, width, height, renderWidth, renderHeight, z);
+            return true;
         }
-
-        smallFbo.bindFramebuffer(true);
-
-        Vec3d center = renderer.getCenter();
-        float yRot = (float) Configs.Preview.PREVIEW_ROTATION_Y.getDoubleValue();
-        float xRot = (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue();
-        double fov = Configs.Preview.PREVIEW_FOV.getDoubleValue();
-        renderer.draw(width, height, fov, yRot, xRot, renderer.getDefaultDistance(fov, (double) width / height),
-                      center.x, center.y, center.z, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
-
-        Minecraft.getMinecraft().getFramebuffer().bindFramebuffer(true);
-
-        PreviewRenderUtils.blitFramebuffer(smallFbo, x, y, width, height, width, height, z);
-
-        return true;
+        catch (Throwable t)
+        {
+            LOGGER.warn("Could not draw schematic list preview for " + file, t);
+            return false;
+        }
+        finally
+        {
+            Minecraft.getMinecraft().getFramebuffer().bindFramebuffer(true);
+        }
     }
 
     public static void tickClose()

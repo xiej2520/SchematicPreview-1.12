@@ -32,7 +32,7 @@ import litematica.schematic.Schematic;
  */
 public class PreviewWidget extends InteractableWidget
 {
-    private static final int BUTTON_SIZE = 12;
+    private static final int BUTTON_SIZE = 14;
     private static final double MIN_DISTANCE = 1.5;
 
     private final Path path;
@@ -279,6 +279,14 @@ public class PreviewWidget extends InteractableWidget
 
         renderer.tick();
 
+        if (renderer.hasFailed())
+        {
+            PreviewRenderUtils.renderPlaceholder(x, y, width, height, z, "schematicpreview.label.preview.invalid", ctx);
+            this.renderOverlayButtons(x, y, ctx);
+            this.serviceCaptureRequest(renderer);
+            return;
+        }
+
         // The renderer builds the VBOs incrementally.  Until the upload is complete the FBO
         // contains only its clear color; showing that as a finished preview looks like a
         // window-size/render failure, especially for larger schematics.
@@ -344,10 +352,15 @@ public class PreviewWidget extends InteractableWidget
 
         this.fbo.bindFramebuffer(true);
 
-        renderer.draw(texWidth, texHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), this.yRot, this.xRot, this.distance,
-                      this.targetX, this.targetY, this.targetZ, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
-
-        this.mc.getFramebuffer().bindFramebuffer(true);
+        try
+        {
+            renderer.draw(texWidth, texHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), this.yRot, this.xRot, this.distance,
+                          this.targetX, this.targetY, this.targetZ, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
+        }
+        finally
+        {
+            this.mc.getFramebuffer().bindFramebuffer(true);
+        }
     }
 
     private void renderOverlayButtons(int x, int y, ScreenContext ctx)
@@ -358,13 +371,13 @@ public class PreviewWidget extends InteractableWidget
         this.renderOverlayButton(this.getFreecamButtonX(), barY, SchematicPreviewIcons.FREECAM,
                 this.freecam || this.isOverFreecamButton(ctx.mouseX, ctx.mouseY), ctx);
 
-        if (this.getWidth() > 36)
+        if (this.getWidth() > 3 * BUTTON_SIZE)
         {
             this.renderOverlayButton(this.getCopyButtonX(), barY, SchematicPreviewIcons.COPY,
                     this.isOverCopyButton(ctx.mouseX, ctx.mouseY), ctx);
         }
 
-        if (this.getWidth() > 54)
+        if (this.getWidth() > 4 * BUTTON_SIZE + 7)
         {
             this.renderOverlayButton(this.getSaveButtonX(), barY, SchematicPreviewIcons.SAVE,
                     this.isOverSaveButton(ctx.mouseX, ctx.mouseY), ctx);
@@ -374,10 +387,16 @@ public class PreviewWidget extends InteractableWidget
     private void renderOverlayButton(int x, int y, malilib.gui.icon.BaseIcon icon,
                                      boolean highlighted, ScreenContext ctx)
     {
-        int color = highlighted ? 0xFF3070FF : 0x80000000;
+        int color = highlighted ? 0xD0707070 : 0xB0202020;
         int variant = highlighted ? 2 : 1;
-        ShapeRenderUtils.renderRectangle(x, y, this.getZ() + 1f, BUTTON_SIZE, BUTTON_SIZE, color, ctx);
-        icon.renderAt(x, y, this.getZ() + 2f, variant, ctx);
+        int border = 0xFF999999;
+        ShapeRenderUtils.renderRectangle(x, y, this.getZ() + 1f, BUTTON_SIZE, 1, border, ctx);
+        ShapeRenderUtils.renderRectangle(x, y + BUTTON_SIZE - 1, this.getZ() + 1f, BUTTON_SIZE, 1, border, ctx);
+        ShapeRenderUtils.renderRectangle(x, y + 1, this.getZ() + 1f, 1, BUTTON_SIZE - 2, border, ctx);
+        ShapeRenderUtils.renderRectangle(x + BUTTON_SIZE - 1, y + 1, this.getZ() + 1f, 1, BUTTON_SIZE - 2, border, ctx);
+        ShapeRenderUtils.renderRectangle(x + 1, y + 1, this.getZ() + 1f,
+                BUTTON_SIZE - 2, BUTTON_SIZE - 2, color, ctx);
+        icon.renderAt(x + 1, y + 1, this.getZ() + 2f, variant, ctx);
     }
 
     private void onSave()
