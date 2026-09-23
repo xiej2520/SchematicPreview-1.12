@@ -45,12 +45,40 @@ public final class PreviewRenderUtils
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-        buffer.pos(x, y + height, z).tex(0.0, 0.0).endVertex();
-        buffer.pos(x + width, y + height, z).tex(maxU, 0.0).endVertex();
-        buffer.pos(x + width, y, z).tex(maxU, maxV).endVertex();
-        buffer.pos(x, y, z).tex(0.0, maxV).endVertex();
-        tessellator.draw();
+
+        // A failed preview draw can interrupt the previous blit after begin() but before
+        // Tessellator.draw() finishes. Discard that partial batch before starting the next one;
+        // otherwise malilib's next GUI batch fails with "Already building" as well.
+        try
+        {
+            buffer.finishDrawing();
+        }
+        catch (IllegalStateException ignored)
+        {
+            // The normal case: no batch was left open.
+        }
+
+        try
+        {
+            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+            buffer.pos(x, y + height, z).tex(0.0, 0.0).endVertex();
+            buffer.pos(x + width, y + height, z).tex(maxU, 0.0).endVertex();
+            buffer.pos(x + width, y, z).tex(maxU, maxV).endVertex();
+            buffer.pos(x, y, z).tex(0.0, maxV).endVertex();
+            tessellator.draw();
+        }
+        finally
+        {
+            try
+            {
+                buffer.finishDrawing();
+            }
+            catch (IllegalStateException ignored)
+            {
+                // Tessellator.draw() normally closes the batch; this is only cleanup after a
+                // failure or a renderer that already finished it.
+            }
+        }
 
         GlStateManager.disableBlend();
     }

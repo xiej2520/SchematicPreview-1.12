@@ -19,7 +19,6 @@ import malilib.gui.widget.LabelWidget;
 
 import dev.froyln.schematicpreview.config.Configs;
 import dev.froyln.schematicpreview.gui.PreviewWidget;
-import dev.froyln.schematicpreview.render.PreviewCache;
 
 /** Adds the live 3D preview to Litematica's path-based schematic info panel. */
 @Mixin(AbstractSchematicInfoWidget.class)
@@ -95,7 +94,6 @@ public abstract class SchematicInfoWidgetMixin extends ContainerWidget
     private void schematicpreview$clearCache(CallbackInfo ci)
     {
         this.schematicpreview$closePreview();
-        PreviewCache.close();
     }
 
     @Unique
