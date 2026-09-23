@@ -1,6 +1,8 @@
 package dev.froyln.schematicpreview.gui;
 
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 import javax.annotation.Nullable;
 
 import net.minecraft.item.Item;
@@ -27,7 +29,7 @@ import dev.froyln.schematicpreview.render.PreviewCache;
 /**
  * A {@link DirectoryEntryWidget} that draws a live 3D preview over the file-type icon when the
  * active {@link PreviewType} calls for one; directories show their custom icon
- * ({@link DirectoryIconStore}) or a preview of their first schematic file.
+ * ({@link DirectoryIconStore}) or a preview of their first renderable schematic file.
  */
 public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
 {
@@ -37,7 +39,7 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
     private final PreviewType previewType;
     private final DirectoryEntryType entryType;
     @Nullable private final DirectoryIconStore.Entry iconEntry;
-    @Nullable private final Path firstSchematicInDir;
+    private final List<Path> schematicFilesInDir;
     private final boolean showBigVisual;
     @Nullable private StyledTextLine clampedTileName;
 
@@ -53,12 +55,13 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
 
         boolean wantsSchematicVisual = previewType.hasPreview() &&
                 (this.iconEntry == null || this.iconEntry.position == IconPosition.DEFAULT_WITH_SCHEMATIC);
-        this.firstSchematicInDir = (this.entryType == DirectoryEntryType.DIRECTORY && wantsSchematicVisual)
-                ? PreviewCache.getFirstSchematicIn(entry.getFullPath(), BrowserWidgetAccessors.getFileFilter(fileBrowserWidget)) : null;
+        this.schematicFilesInDir = (this.entryType == DirectoryEntryType.DIRECTORY && wantsSchematicVisual)
+                ? PreviewCache.getSchematicFilesIn(entry.getFullPath(), BrowserWidgetAccessors.getFileFilter(fileBrowserWidget))
+                : Collections.emptyList();
 
         boolean directoryBigIcon = this.iconEntry != null && this.iconEntry.position == IconPosition.CENTER;
         boolean directorySchematicVisual = this.entryType == DirectoryEntryType.DIRECTORY &&
-                wantsSchematicVisual && this.firstSchematicInDir != null;
+                wantsSchematicVisual && this.schematicFilesInDir.isEmpty() == false;
 
         this.showBigVisual = (this.entryType == DirectoryEntryType.FILE && previewType.hasPreview()) ||
                               directoryBigIcon || directorySchematicVisual;
@@ -120,6 +123,15 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
         {
             this.renderPreviewBox(this.data.getFullPath(), x, y, z);
         }
+
+        // Draw the tile name after the preview quad so the preview cannot cover it.
+        if (this.clampedTileName != null)
+        {
+            int textY = y + this.getHeight() - TILE_TEXT_STRIP_HEIGHT + 2;
+            int textX = x + Math.max(0, (this.getWidth() - this.clampedTileName.renderWidth) / 2);
+            this.renderTextLine(textX, textY, z + 0.5f, this.getTextSettings().getTextColor(),
+                               this.getTextSettings().getTextShadowEnabled(), this.clampedTileName, ctx);
+        }
     }
 
     /**
@@ -148,10 +160,7 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
     {
         if (this.iconEntry == null)
         {
-            if (this.firstSchematicInDir != null)
-            {
-                this.renderPreviewBox(this.firstSchematicInDir, x, y, z);
-            }
+            this.renderDirectoryPreview(x, y, z);
 
             return;
         }
@@ -163,9 +172,9 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
             return;
         }
 
-        if (this.iconEntry.position == IconPosition.DEFAULT_WITH_SCHEMATIC && this.firstSchematicInDir != null)
+        if (this.iconEntry.position == IconPosition.DEFAULT_WITH_SCHEMATIC)
         {
-            this.renderPreviewBox(this.firstSchematicInDir, x, y, z);
+            this.renderDirectoryPreview(x, y, z);
         }
 
         ItemStack stack = new ItemStack(item);
@@ -184,18 +193,37 @@ public class PreviewDirectoryEntryWidget extends DirectoryEntryWidget
         }
     }
 
+    private boolean renderDirectoryPreview(int x, int y, float z)
+    {
+        int[] box = this.previewBox(x, y);
+
+        for (Path schematicPath : this.schematicFilesInDir)
+        {
+            PreviewCache.SmallPreviewResult result = PreviewCache.renderSmallPreviewResult(
+                    schematicPath, box[0], box[1], box[2], box[3], z + 0.5f);
+
+            if (result == PreviewCache.SmallPreviewResult.RENDERED)
+            {
+                return true;
+            }
+
+            // Do not queue every file in a large directory while the first candidate is loading.
+            // Once it is known to be unusable, continue to the next candidate.
+            if (result == PreviewCache.SmallPreviewResult.PENDING)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     @Override
     protected void renderInfoColumns(int x, int y, float z, ScreenContext ctx)
     {
         if (this.showBigVisual && this.previewType.isTile())
         {
-            if (this.clampedTileName != null)
-            {
-                int textY = y + this.getHeight() - TILE_TEXT_STRIP_HEIGHT + 2;
-                int textX = x + Math.max(0, (this.getWidth() - this.clampedTileName.renderWidth) / 2);
-                this.renderTextLine(textX, textY, z + 0.5f, this.getTextSettings().getTextColor(), this.clampedTileName, ctx);
-            }
-
+            // The tile name is rendered after the preview in renderAt().
             return;
         }
 

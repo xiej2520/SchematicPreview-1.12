@@ -3,10 +3,12 @@ package dev.froyln.schematicpreview.render;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -44,8 +46,9 @@ public final class PreviewCache
 
     private static final Map<Path, CompletableFuture<Schematic>> SCHEMATICS = new HashMap<>();
     private static final Map<Path, PreviewRenderer> RENDERERS = new HashMap<>();
-    // Directory -> its first schematic file; malilib rebuilds entry widgets on every scroll.
-    private static final Map<Path, Optional<Path>> FIRST_SCHEMATICS = new HashMap<>();
+    // Directory -> sorted schematic candidates; malilib rebuilds entry widgets on every scroll.
+    // Keeping all candidates lets a broken/unsupported first file fall through to the next one.
+    private static final Map<Path, List<Path>> SCHEMATIC_FILES = new HashMap<>();
 
     // Shared by every list/tile row preview - never one Framebuffer per row.
     @Nullable private static Framebuffer smallFbo;
@@ -92,22 +95,31 @@ public final class PreviewCache
     }
 
     /**
-     * First regular file in {@code directory} (sorted by path) accepted by {@code filter}, or
-     * {@code null}; cached until {@link #close()}.
+     * All regular files in {@code directory} (sorted by path) accepted by {@code filter};
+     * cached until {@link #close()}.
      */
-    @Nullable
-    public static Path getFirstSchematicIn(Path directory, Predicate<Path> filter)
+    public static List<Path> getSchematicFilesIn(Path directory, Predicate<Path> filter)
     {
-        return FIRST_SCHEMATICS.computeIfAbsent(directory, dir -> {
+        return SCHEMATIC_FILES.computeIfAbsent(directory, dir -> {
             try (Stream<Path> stream = Files.list(dir))
             {
-                return stream.filter(Files::isRegularFile).filter(filter).sorted().findFirst();
+                return Collections.unmodifiableList(stream.filter(Files::isRegularFile)
+                                                       .filter(filter)
+                                                       .sorted()
+                                                       .collect(Collectors.toList()));
             }
             catch (IOException ignore)
             {
-                return Optional.empty();
+                return Collections.emptyList();
             }
-        }).orElse(null);
+        });
+    }
+
+    public enum SmallPreviewResult
+    {
+        RENDERED,
+        PENDING,
+        UNAVAILABLE
     }
 
     /** Non-air block count from the containers; the file's own {@code TotalBlocks} tag is untrusted. */
@@ -130,23 +142,29 @@ public final class PreviewCache
      */
     public static boolean renderSmallPreview(Path file, int x, int y, int width, int height, float z)
     {
+        return renderSmallPreviewResult(file, x, y, width, height, z) == SmallPreviewResult.RENDERED;
+    }
+
+    /** Reports whether a preview is loading or cannot be rendered, in addition to success. */
+    public static SmallPreviewResult renderSmallPreviewResult(Path file, int x, int y, int width, int height, float z)
+    {
         if (width <= 0 || height <= 0)
         {
-            return false;
+            return SmallPreviewResult.UNAVAILABLE;
         }
 
         CompletableFuture<Schematic> future = getSchematic(file);
 
         if (future.isDone() == false)
         {
-            return false;
+            return SmallPreviewResult.PENDING;
         }
 
         Schematic schematic = future.getNow(null);
 
         if (schematic == null || schematic.getMetadata().getTotalVolume() > Configs.Preview.PREVIEW_MAX_VOLUME.getIntegerValue())
         {
-            return false;
+            return SmallPreviewResult.UNAVAILABLE;
         }
 
         try
@@ -157,7 +175,7 @@ public final class PreviewCache
 
             if (renderer.isTessellationDone() == false || renderer.hasFailed())
             {
-                return false;
+                return renderer.hasFailed() ? SmallPreviewResult.UNAVAILABLE : SmallPreviewResult.PENDING;
             }
 
             int scale = new ScaledResolution(Minecraft.getMinecraft()).getScaleFactor();
@@ -189,12 +207,12 @@ public final class PreviewCache
 
             Minecraft.getMinecraft().getFramebuffer().bindFramebuffer(true);
             PreviewRenderUtils.blitFramebuffer(smallFbo, x, y, width, height, renderWidth, renderHeight, z);
-            return true;
+            return SmallPreviewResult.RENDERED;
         }
         catch (Throwable t)
         {
             LOGGER.warn("Could not draw schematic list preview for " + file, t);
-            return false;
+            return SmallPreviewResult.UNAVAILABLE;
         }
         finally
         {
@@ -205,7 +223,7 @@ public final class PreviewCache
     public static void tickClose()
     {
         boolean hasState = SCHEMATICS.isEmpty() == false || RENDERERS.isEmpty() == false ||
-                           FIRST_SCHEMATICS.isEmpty() == false || smallFbo != null;
+                           SCHEMATIC_FILES.isEmpty() == false || smallFbo != null;
 
         if (Minecraft.getMinecraft().currentScreen == null && hasState)
         {
@@ -227,16 +245,16 @@ public final class PreviewCache
         }
     }
 
-    /** Forgets which file is first in {@code directory}, e.g. after a new file was written into it. */
+    /** Forgets the directory's schematic candidates, e.g. after a new file was written into it. */
     public static void invalidateDirectory(@Nullable Path directory)
     {
-        FIRST_SCHEMATICS.remove(directory);
+        SCHEMATIC_FILES.remove(directory);
     }
 
-    /** Forgets every directory's first file; called whenever a browser list is (re)built. */
+    /** Forgets every directory's candidates; called whenever a browser list is (re)built. */
     public static void invalidateDirectories()
     {
-        FIRST_SCHEMATICS.clear();
+        SCHEMATIC_FILES.clear();
     }
 
     public static void close()
@@ -248,7 +266,7 @@ public final class PreviewCache
 
         RENDERERS.clear();
         SCHEMATICS.clear();
-        FIRST_SCHEMATICS.clear();
+        SCHEMATIC_FILES.clear();
 
         if (smallFbo != null)
         {
