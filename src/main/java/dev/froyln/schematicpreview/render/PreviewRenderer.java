@@ -5,6 +5,8 @@ import java.util.Map;
 import java.awt.image.BufferedImage;
 import java.nio.IntBuffer;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.BufferUtils;
@@ -37,6 +39,7 @@ import dev.froyln.schematicpreview.config.Configs;
 /** Client-thread tessellation and drawing for one schematic. */
 public class PreviewRenderer
 {
+    private static final Logger LOGGER = LogManager.getLogger("SchematicPreview");
     private static final int TESSELLATE_BUDGET_PER_TICK = 4096;
     private static final int FULL_BRIGHT_LIGHT = 15728880;
 
@@ -47,6 +50,7 @@ public class PreviewRenderer
     private long cursor;
     private long totalVolume;
     private boolean tessellationDone;
+    private boolean failed;
 
     public void setup(LitematicaSchematic schematic)
     {
@@ -56,11 +60,17 @@ public class PreviewRenderer
         this.totalVolume = (long) size.getX() * size.getY() * size.getZ();
         this.cursor = 0;
         this.tessellationDone = this.totalVolume <= 0;
+        this.failed = false;
     }
 
     public boolean isTessellationDone()
     {
         return this.tessellationDone;
+    }
+
+    public boolean hasFailed()
+    {
+        return this.failed;
     }
 
     public Vec3d getCenter()
@@ -82,6 +92,26 @@ public class PreviewRenderer
     }
 
     public void tick()
+    {
+        if (this.tessellationDone || this.failed)
+        {
+            return;
+        }
+
+        try
+        {
+            this.tickInternal();
+        }
+        catch (Throwable t)
+        {
+            this.failed = true;
+            this.tessellationDone = true;
+            this.discardBuildingBuffers();
+            LOGGER.warn("Could not tessellate schematic preview", t);
+        }
+    }
+
+    private void tickInternal()
     {
         if (this.tessellationDone)
         {
@@ -141,6 +171,16 @@ public class PreviewRenderer
             this.upload();
             this.tessellationDone = true;
         }
+    }
+
+    private void discardBuildingBuffers()
+    {
+        for (BufferBuilder buffer : this.buildingBuffers.values())
+        {
+            buffer.clear();
+        }
+
+        this.buildingBuffers.clear();
     }
 
     private void upload()

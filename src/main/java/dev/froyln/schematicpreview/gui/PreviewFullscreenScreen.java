@@ -19,6 +19,8 @@ import dev.froyln.schematicpreview.render.PreviewRenderer;
 public class PreviewFullscreenScreen extends GuiBase
 {
     private static final int TOP_MARGIN = 24;
+    private static final int TOOLBAR_BUTTON_HEIGHT = 20;
+    private static final int TOOLBAR_BUTTON_WIDTH = 18;
 
     private final File file;
     private boolean cameraInitialized;
@@ -46,20 +48,25 @@ public class PreviewFullscreenScreen extends GuiBase
     {
         super.initGui();
 
-        ButtonGeneric save = new ButtonGeneric(2, 2, 18, 16, "",
+        ButtonGeneric save = new ButtonGeneric(2, 2, TOOLBAR_BUTTON_WIDTH, TOOLBAR_BUTTON_HEIGHT, "",
                 StringUtils.translate("schematicpreview.button.save_screenshot"));
+        save.setRenderDefaultBackground(false);
         this.addButton(save, (button, mouseButton) -> this.capture(true));
 
-        ButtonGeneric copy = new ButtonGeneric(22, 2, 18, 16, "",
+        ButtonGeneric copy = new ButtonGeneric(22, 2, TOOLBAR_BUTTON_WIDTH, TOOLBAR_BUTTON_HEIGHT, "",
                 StringUtils.translate("schematicpreview.button.copy_screenshot"));
+        copy.setRenderDefaultBackground(false);
         this.addButton(copy, (button, mouseButton) -> this.capture(false));
 
-        ButtonGeneric freecam = new ButtonGeneric(42, 2, 18, 16, "",
+        ButtonGeneric freecam = new ButtonGeneric(42, 2, TOOLBAR_BUTTON_WIDTH, TOOLBAR_BUTTON_HEIGHT, "",
                 StringUtils.translate("schematicpreview.button.freecam"));
+        freecam.setRenderDefaultBackground(false);
         this.addButton(freecam, (button, mouseButton) -> this.freecam = ! this.freecam);
 
-        ButtonGeneric close = new ButtonGeneric(Math.max(64, this.width - 20), 2, 18, 16, "",
+        ButtonGeneric close = new ButtonGeneric(Math.max(64, this.width - 20), 2,
+                TOOLBAR_BUTTON_WIDTH, TOOLBAR_BUTTON_HEIGHT, "",
                 StringUtils.translate("malilib.gui.button.close"));
+        close.setRenderDefaultBackground(false);
         this.addButton(close, (button, mouseButton) -> this.closeGui(true));
     }
 
@@ -91,12 +98,25 @@ public class PreviewFullscreenScreen extends GuiBase
                     this.height / 2, COLOR_WHITE);
         }
 
-        PreviewIcons.SAVE.renderAt(5, 4, mouseX >= 2 && mouseX < 20 && mouseY >= 2 && mouseY < 18);
-        PreviewIcons.COPY.renderAt(25, 4, mouseX >= 22 && mouseX < 40 && mouseY >= 2 && mouseY < 18);
-        PreviewIcons.FREECAM.renderAt(45, 4, this.freecam || (mouseX >= 42 && mouseX < 60 && mouseY >= 2 && mouseY < 18));
+        this.drawToolbarButton(2, PreviewIcons.SAVE, this.isOverToolbarButton(2, mouseX, mouseY));
+        this.drawToolbarButton(22, PreviewIcons.COPY, this.isOverToolbarButton(22, mouseX, mouseY));
+        this.drawToolbarButton(42, PreviewIcons.FREECAM,
+                this.freecam || this.isOverToolbarButton(42, mouseX, mouseY));
         int closeX = Math.max(64, this.width - 20);
-        PreviewIcons.CLOSE.renderAt(closeX + 3, 4,
-                mouseX >= closeX && mouseX < closeX + 18 && mouseY >= 2 && mouseY < 18);
+        this.drawToolbarButton(closeX, PreviewIcons.CLOSE, this.isOverToolbarButton(closeX, mouseX, mouseY));
+    }
+
+    private boolean isOverToolbarButton(int x, int mouseX, int mouseY)
+    {
+        return mouseX >= x && mouseX < x + TOOLBAR_BUTTON_WIDTH &&
+               mouseY >= 2 && mouseY < 2 + TOOLBAR_BUTTON_HEIGHT;
+    }
+
+    private void drawToolbarButton(int x, PreviewIcons icon, boolean highlighted)
+    {
+        RenderUtils.drawOutlinedBox(x, 2, TOOLBAR_BUTTON_WIDTH, TOOLBAR_BUTTON_HEIGHT,
+                highlighted ? 0xD0707070 : 0xB0202020, 0xFF999999);
+        icon.renderAt(x + 3, 6, highlighted);
     }
 
     private void updateCamera(int mouseX, int mouseY)

@@ -34,14 +34,40 @@ public final class PreviewRenderUtils
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
+
+        try
+        {
+            buffer.end();
+        }
+        catch (IllegalStateException ignored)
+        {
+            // No interrupted GUI batch is open in the normal case.
+        }
+
         buffer.begin(GL11.GL_QUADS, VertexFormats.POSITION_TEXTURE);
-        float maxU = usedWidth / (float) framebuffer.textureWidth;
-        float maxV = usedHeight / (float) framebuffer.textureHeight;
-        buffer.vertex(x, y + height, 0).texture(0, 0).next();
-        buffer.vertex(x + width, y + height, 0).texture(maxU, 0).next();
-        buffer.vertex(x + width, y, 0).texture(maxU, maxV).next();
-        buffer.vertex(x, y, 0).texture(0, maxV).next();
-        tessellator.draw();
+
+        try
+        {
+            float maxU = usedWidth / (float) framebuffer.textureWidth;
+            float maxV = usedHeight / (float) framebuffer.textureHeight;
+            buffer.vertex(x, y + height, 0).texture(0, 0).next();
+            buffer.vertex(x + width, y + height, 0).texture(maxU, 0).next();
+            buffer.vertex(x + width, y, 0).texture(maxU, maxV).next();
+            buffer.vertex(x, y, 0).texture(0, maxV).next();
+            tessellator.draw();
+        }
+        finally
+        {
+            try
+            {
+                buffer.end();
+            }
+            catch (IllegalStateException ignored)
+            {
+                // Tessellator.draw() normally closes the batch; this is failure cleanup.
+            }
+        }
+
         RenderSystem.disableBlend();
     }
 

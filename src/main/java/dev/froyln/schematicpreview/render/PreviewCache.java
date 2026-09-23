@@ -10,6 +10,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import javax.annotation.Nullable;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.util.math.Vec3d;
@@ -21,6 +24,8 @@ import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 /** Shared schematic loads, renderers, and the small preview framebuffer. */
 public final class PreviewCache
 {
+    private static final Logger LOGGER = LogManager.getLogger("SchematicPreview");
+
     private static final Executor LOADER = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "SchematicPreview-Loader");
         thread.setDaemon(true);
@@ -157,6 +162,14 @@ public final class PreviewCache
         }
 
         PreviewRenderer renderer = getRenderer(file, schematic);
+        renderer.tick();
+
+        if (renderer.hasFailed())
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Invalid preview");
+            return true;
+        }
+
         double distance = renderer.getDefaultDistance(Configs.Preview.PREVIEW_FOV.getDoubleValue(), (double) width / height);
         Vec3d center = renderer.getCenter();
         renderPreview(file, x, y, width, height,
@@ -195,6 +208,12 @@ public final class PreviewCache
         PreviewRenderer renderer = getRenderer(file, schematic);
         renderer.tick();
 
+        if (renderer.hasFailed())
+        {
+            PreviewRenderUtils.placeholder(x, y, width, height, "Invalid preview");
+            return true;
+        }
+
         if (renderer.isTessellationDone() == false)
         {
             PreviewRenderUtils.placeholder(x, y, width, height, "Loading preview...");
@@ -205,12 +224,25 @@ public final class PreviewCache
         int framebufferWidth = Math.max(1, width * scale);
         int framebufferHeight = Math.max(1, height * scale);
         ensureFramebuffer(framebufferWidth, framebufferHeight);
-        smallFramebuffer.beginWrite(true);
-        renderer.draw(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), yRot, xRot,
-                      distance, targetX, targetY, targetZ);
-        MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
-        PreviewRenderUtils.blitFramebuffer(smallFramebuffer, x, y, width, height,
-                                           framebufferWidth, framebufferHeight);
+        try
+        {
+            smallFramebuffer.beginWrite(true);
+            renderer.draw(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), yRot, xRot,
+                          distance, targetX, targetY, targetZ);
+            MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+            PreviewRenderUtils.blitFramebuffer(smallFramebuffer, x, y, width, height,
+                                               framebufferWidth, framebufferHeight);
+        }
+        catch (Throwable t)
+        {
+            LOGGER.warn("Could not draw schematic preview for " + file, t);
+            MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+            PreviewRenderUtils.placeholder(x, y, width, height, "Invalid preview");
+        }
+        finally
+        {
+            MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
+        }
         return true;
     }
 
