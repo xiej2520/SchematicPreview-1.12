@@ -1,5 +1,11 @@
 package dev.froyln.schematicpreview.mixin;
 
+import java.nio.file.Path;
+import java.util.Optional;
+import javax.annotation.Nullable;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -9,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import litematica.gui.BaseSchematicBrowserScreen;
 import litematica.gui.util.SchematicBrowserIconProvider;
+import litematica.schematic.LoadedSchematic;
 import malilib.gui.widget.button.GenericButton;
 import malilib.gui.widget.list.BaseFileBrowserWidget;
 import malilib.gui.widget.list.BaseFileBrowserWidget.DirectoryEntry;
@@ -31,9 +38,34 @@ import dev.froyln.schematicpreview.render.PreviewCache;
 @Mixin(BaseSchematicBrowserScreen.class)
 public abstract class BaseSchematicBrowserScreenMixin
 {
+    @Unique private static final Logger SCHEMATICPREVIEW_LOGGER = LogManager.getLogger("SchematicPreview");
     private static final int BUTTON_SIZE = 14;
 
     @Shadow(remap = false) protected SchematicBrowserIconProvider cachingIconProvider;
+    @Shadow(remap = false) protected Optional<LoadedSchematic> lastSelectedSchematic;
+    @Shadow(remap = false) @Nullable protected Path lastSelectedSchematicFile;
+
+    @Inject(method = "getLastSelectedSchematic", at = @At("HEAD"), remap = false, cancellable = true)
+    private void schematicpreview$loadLastSelectedSchematicSafely(CallbackInfoReturnable<Optional<LoadedSchematic>> cir)
+    {
+        if (this.lastSelectedSchematic.isPresent() == false && this.lastSelectedSchematicFile != null)
+        {
+            try
+            {
+                this.lastSelectedSchematic = LoadedSchematic.tryLoadSchematic(this.lastSelectedSchematicFile);
+            }
+            catch (Throwable t)
+            {
+                // Conversion is a property of the selected file, not a reason to destroy the
+                // browser. Leave the selection active with no loaded schematic so the manager
+                // can still show the file and the user can select another one.
+                SCHEMATICPREVIEW_LOGGER.warn("Could not load selected schematic " + this.lastSelectedSchematicFile + ": " + t);
+                this.lastSelectedSchematic = Optional.empty();
+            }
+        }
+
+        cir.setReturnValue(this.lastSelectedSchematic);
+    }
 
     @Inject(method = "createListWidget", at = @At("RETURN"), remap = false)
     private void schematicpreview$installPreviewEntries(CallbackInfoReturnable<BaseFileBrowserWidget> cir)

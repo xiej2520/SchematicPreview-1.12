@@ -6,6 +6,7 @@
 	"client": [
 		"SchematicInfoWidgetMixin",
 		"BaseSchematicBrowserScreenMixin",
+		"SchematicManagerScreenMixin",
 		"DirectoryNavigationWidgetMixin",
 		"DirectoryNavigationWidgetAccessor",
 		"SearchBarWidgetAccessor",
