@@ -4,10 +4,15 @@ import java.io.File;
 import java.io.FileFilter;
 import java.awt.image.BufferedImage;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 import org.apache.logging.log4j.LogManager;
@@ -26,14 +31,21 @@ public final class PreviewCache
 {
     private static final Logger LOGGER = LogManager.getLogger("SchematicPreview");
 
-    private static final Executor LOADER = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "SchematicPreview-Loader");
-        thread.setDaemon(true);
-        return thread;
-    });
+    /** A queued load is dropped if its path has not been requested for this long. */
+    private static final long STALE_LOAD_MILLIS = 1000L;
+    private static final int MAX_ENTRIES = 48;
 
-    private static final Map<File, CompletableFuture<LitematicaSchematic>> SCHEMATICS = new HashMap<>();
-    private static final Map<File, PreviewRenderer> RENDERERS = new HashMap<>();
+    private static final LifoExecutor LOADER = new LifoExecutor();
+
+    /** Paths whose load failure was already logged; cleared with the cache. */
+    private static final Set<File> WARNED = ConcurrentHashMap.newKeySet();
+
+    // Access-ordered, so the eldest entry is the least recently used one. Only touched from
+    // the render thread; the loader thread works on the Entry objects only.
+    private static final Map<File, Entry> SCHEMATICS = new LinkedHashMap<>(16, 0.75f, true);
+    private static final Map<File, PreviewRenderer> RENDERERS = new LinkedHashMap<>(16, 0.75f, true);
+    private static final Map<File, Long> LAST_USED = new HashMap<>();
+    private static long clientTick;
     @Nullable private static Framebuffer smallFramebuffer;
 
     private PreviewCache()
@@ -43,31 +55,110 @@ public final class PreviewCache
     public static CompletableFuture<LitematicaSchematic> getSchematic(File file)
     {
         File key = file.getAbsoluteFile();
-        return SCHEMATICS.computeIfAbsent(key, PreviewCache::load);
+        Entry entry = SCHEMATICS.get(key);
+
+        if (entry == null || entry.dropped)
+        {
+            entry = new Entry();
+            entry.future = load(key, entry);
+            SCHEMATICS.put(key, entry);
+        }
+
+        entry.lastRequested = System.currentTimeMillis();
+
+        touch(key);
+        trim(SCHEMATICS, null);
+        return entry.future;
     }
 
-    private static CompletableFuture<LitematicaSchematic> load(File file)
+    private static CompletableFuture<LitematicaSchematic> load(File file, Entry entry)
     {
-        return CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<LitematicaSchematic> future = new CompletableFuture<>();
+        entry.lastRequested = System.currentTimeMillis();
+
+        // Newest request first; a path that scrolled out of view while waiting is dropped and
+        // gets queued again when it becomes visible.
+        LOADER.execute(() -> {
+            if (System.currentTimeMillis() - entry.lastRequested > STALE_LOAD_MILLIS)
+            {
+                entry.dropped = true;
+                future.complete(null);
+                return;
+            }
+
             try
             {
-                return LitematicaSchematic.createFromFile(file.getParentFile(), file.getName());
+                future.complete(LitematicaSchematic.createFromFile(file.getParentFile(), file.getName()));
             }
-            catch (Throwable ignored)
+            catch (Throwable t)
             {
-                return null;
+                if (WARNED.add(file))
+                {
+                    LOGGER.warn("Could not load schematic " + file, t);
+                }
+
+                future.complete(null);
             }
-        }, LOADER);
+        });
+
+        return future;
     }
 
     public static PreviewRenderer getRenderer(File file, LitematicaSchematic schematic)
     {
         File key = file.getAbsoluteFile();
-        return RENDERERS.computeIfAbsent(key, ignored -> {
-            PreviewRenderer renderer = new PreviewRenderer();
+        PreviewRenderer renderer = RENDERERS.get(key);
+
+        if (renderer == null)
+        {
+            renderer = new PreviewRenderer();
             renderer.setup(schematic);
-            return renderer;
-        });
+            RENDERERS.put(key, renderer);
+        }
+
+        touch(key);
+        trim(RENDERERS, PreviewRenderer::close);
+        return renderer;
+    }
+
+    private static void touch(File key)
+    {
+        LAST_USED.put(key, clientTick);
+    }
+
+    /** True for paths drawn during the current frame; those must not be evicted. */
+    private static boolean isInUse(File key)
+    {
+        Long tick = LAST_USED.get(key);
+        return tick != null && tick >= clientTick - 1;
+    }
+
+    /** Drops least recently used entries beyond the limit. Render thread only. */
+    private static <V> void trim(Map<File, V> map, @Nullable Consumer<V> onEvict)
+    {
+        if (map.size() <= MAX_ENTRIES)
+        {
+            return;
+        }
+
+        Iterator<Map.Entry<File, V>> it = map.entrySet().iterator();
+
+        while (it.hasNext() && map.size() > MAX_ENTRIES)
+        {
+            Map.Entry<File, V> entry = it.next();
+
+            if (isInUse(entry.getKey()))
+            {
+                continue;
+            }
+
+            it.remove();
+
+            if (onEvict != null)
+            {
+                onEvict.accept(entry.getValue());
+            }
+        }
     }
 
     /** Returns the first litematic file in a directory, for directory-entry previews. */
@@ -295,6 +386,8 @@ public final class PreviewCache
     {
         File key = file.getAbsoluteFile();
         SCHEMATICS.remove(key);
+        WARNED.remove(key);
+        LAST_USED.remove(key);
         PreviewRenderer renderer = RENDERERS.remove(key);
 
         if (renderer != null)
@@ -308,6 +401,8 @@ public final class PreviewCache
         String prefix = directory.getAbsoluteFile().toPath().normalize().toString();
 
         SCHEMATICS.keySet().removeIf(file -> file.getParentFile() != null &&
+                file.getParentFile().getAbsolutePath().startsWith(prefix));
+        LAST_USED.keySet().removeIf(file -> file.getParentFile() != null &&
                 file.getParentFile().getAbsolutePath().startsWith(prefix));
         RENDERERS.entrySet().removeIf(entry -> {
             File file = entry.getKey();
@@ -332,6 +427,8 @@ public final class PreviewCache
 
         RENDERERS.clear();
         SCHEMATICS.clear();
+        WARNED.clear();
+        LAST_USED.clear();
 
         if (smallFramebuffer != null)
         {
@@ -342,9 +439,56 @@ public final class PreviewCache
 
     public static void tickClose(MinecraftClient mc)
     {
+        ++clientTick;
+
         if (mc.currentScreen == null && (SCHEMATICS.isEmpty() == false || RENDERERS.isEmpty() == false || smallFramebuffer != null))
         {
             close();
+        }
+    }
+
+    private static final class Entry
+    {
+        private CompletableFuture<LitematicaSchematic> future;
+        private volatile boolean dropped;
+        private volatile long lastRequested;
+    }
+
+    /** Single daemon worker that always takes the most recently queued task first. */
+    private static final class LifoExecutor implements Executor
+    {
+        private final LinkedBlockingDeque<Runnable> queue = new LinkedBlockingDeque<>();
+
+        private LifoExecutor()
+        {
+            Thread thread = new Thread(this::run, "SchematicPreview-Loader");
+            thread.setDaemon(true);
+            thread.start();
+        }
+
+        @Override
+        public void execute(Runnable task)
+        {
+            this.queue.addFirst(task);
+        }
+
+        private void run()
+        {
+            while (true)
+            {
+                try
+                {
+                    this.queue.takeFirst().run();
+                }
+                catch (InterruptedException e)
+                {
+                    return;
+                }
+                catch (Throwable t)
+                {
+                    LOGGER.warn("Schematic loader task failed", t);
+                }
+            }
         }
     }
 }

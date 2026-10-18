@@ -200,6 +200,13 @@ public class PreviewRenderer
     public void draw(int width, int height, double fov, float yRot, float xRot, double distance,
                      double targetX, double targetY, double targetZ)
     {
+        this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ,
+                  Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue());
+    }
+
+    public void draw(int width, int height, double fov, float yRot, float xRot, double distance,
+                     double targetX, double targetY, double targetZ, boolean tileEntities)
+    {
         if (width <= 0 || height <= 0)
         {
             return;
@@ -257,7 +264,7 @@ public class PreviewRenderer
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
 
-        if (Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue())
+        if (tileEntities)
         {
             this.drawBlockEntities(matrices);
         }
