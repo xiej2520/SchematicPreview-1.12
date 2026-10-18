@@ -2,6 +2,7 @@ package dev.froyln.schematicpreview.config;
 
 import com.google.common.collect.ImmutableList;
 import malilib.config.option.BooleanConfig;
+import malilib.config.option.ColorConfig;
 import malilib.config.option.ConfigOption;
 import malilib.config.option.DoubleConfig;
 import malilib.config.option.HotkeyConfig;
@@ -51,6 +52,8 @@ public class Configs
         public static final DoubleConfig PREVIEW_FOV = new DoubleConfig("previewFov", 50.0, 30.0, 100.0, "schematicpreview.config.comment.previewFov");
         public static final DoubleConfig PREVIEW_ROTATION_Y = new DoubleConfig("previewRotationY", 45.0, -180.0, 180.0, "schematicpreview.config.comment.previewRotationY");
         public static final DoubleConfig PREVIEW_ROTATION_X = new DoubleConfig("previewRotationX", 30.0, -90.0, 90.0, "schematicpreview.config.comment.previewRotationX");
+        public static final ColorConfig PREVIEW_BACKGROUND_COLOR = new ColorConfig("previewBackgroundColor", "#FF0D0D0D", "schematicpreview.config.comment.previewBackgroundColor");
+        public static final BooleanConfig SCREENSHOT_TRANSPARENT_BACKGROUND = new BooleanConfig("screenshotTransparentBackground", true, "schematicpreview.config.comment.screenshotTransparentBackground");
 
         public static final ImmutableList<ConfigOption<?>> OPTIONS = ImmutableList.of(
                 PREVIEW_MAX_VOLUME,
@@ -58,7 +61,9 @@ public class Configs
                 RENDER_TILE_ENTITIES,
                 PREVIEW_FOV,
                 PREVIEW_ROTATION_Y,
-                PREVIEW_ROTATION_X
+                PREVIEW_ROTATION_X,
+                PREVIEW_BACKGROUND_COLOR,
+                SCREENSHOT_TRANSPARENT_BACKGROUND
         );
     }
 

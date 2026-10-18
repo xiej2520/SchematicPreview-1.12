@@ -42,6 +42,9 @@ re-implemented from scratch:
 - **Preview type:** the grid button next to the browser's path bar cycles List / List preview /
   Tile 5 / 4 / 3 columns (right-click cycles backwards). Tile and list previews are skipped for
   schematics above `previewMaxVolume` blocks (default 125 000).
+- **Background:** `previewBackgroundColor` (Preview tab, default `#FF0D0D0D`) is the preview
+  background and the fill behind the copied image. Saved PNGs stay transparent unless
+  `screenshotTransparentBackground` is turned off.
 - **Directory icons:** right-click a folder's icon in the browser, type an item id
   (`minecraft:diamond_block`), pick a position. Stored in `config/schematicpreview_icons.json`.
 - **Replace:** open a material list (browser → *Material list*, or Loaded Schematics), click

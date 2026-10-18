@@ -22,6 +22,8 @@ import net.minecraft.client.Minecraft;
 
 import malilib.util.FileNameUtils;
 
+import dev.froyln.schematicpreview.config.Configs;
+
 /**
  * File-save and clipboard export for a captured preview image ({@link PreviewWidget#captureImage()}).
  * Both are one-shot, stateless operations - no caller keeps a reference to anything here.
@@ -45,7 +47,8 @@ public final class ScreenshotUtil
                                        .replaceAll("[^A-Za-z0-9_-]", "_");
             File file = dir.resolve(name + "_" + FileNameUtils.getDateTimeString() + ".png").toFile();
 
-            ImageIO.write(image, "png", file);
+            BufferedImage output = Configs.Preview.SCREENSHOT_TRANSPARENT_BACKGROUND.getBooleanValue() ? image : toOpaque(image);
+            ImageIO.write(output, "png", file);
             return file;
         }
         catch (IOException e)
@@ -119,14 +122,12 @@ public final class ScreenshotUtil
     {
         BufferedImage opaque = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
         Graphics2D g = opaque.createGraphics();
-        g.setColor(CLIPBOARD_BACKGROUND);
+        g.setColor(new Color(Configs.Preview.PREVIEW_BACKGROUND_COLOR.getIntegerValue() & 0xFFFFFF));
         g.fillRect(0, 0, opaque.getWidth(), opaque.getHeight());
         g.drawImage(image, 0, 0, null);
         g.dispose();
         return opaque;
     }
-
-    private static final Color CLIPBOARD_BACKGROUND = new Color(13, 13, 13);
 
     private static final class TransferableImage implements Transferable
     {

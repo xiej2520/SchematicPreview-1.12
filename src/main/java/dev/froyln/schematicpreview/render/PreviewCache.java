@@ -288,6 +288,7 @@ public final class PreviewCache
         float xRot = (float) Configs.Preview.PREVIEW_ROTATION_X.getDoubleValue();
         double fov = Configs.Preview.PREVIEW_FOV.getDoubleValue();
         boolean tileEntities = Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue();
+        int background = Configs.Preview.PREVIEW_BACKGROUND_COLOR.getIntegerValue();
 
         Snapshot snapshot = SNAPSHOTS.get(file);
         SmallPreviewResult result = SmallPreviewResult.RENDERED;
@@ -297,9 +298,9 @@ public final class PreviewCache
             touch(file);
         }
 
-        if (snapshot == null || snapshot.matches(renderWidth, renderHeight, fov, yRot, xRot, tileEntities) == false)
+        if (snapshot == null || snapshot.matches(renderWidth, renderHeight, fov, yRot, xRot, tileEntities, background) == false)
         {
-            result = updateSnapshot(file, renderWidth, renderHeight, fov, yRot, xRot, tileEntities);
+            result = updateSnapshot(file, renderWidth, renderHeight, fov, yRot, xRot, tileEntities, background);
             snapshot = SNAPSHOTS.get(file);
         }
 
@@ -315,7 +316,7 @@ public final class PreviewCache
 
     /** Renders {@code file} once into its own texture; returns RENDERED when the snapshot is up to date. */
     private static SmallPreviewResult updateSnapshot(Path file, int renderWidth, int renderHeight, double fov,
-                                                     float yRot, float xRot, boolean tileEntities)
+                                                     float yRot, float xRot, boolean tileEntities, int background)
     {
         CompletableFuture<Schematic> future = getSchematic(file);
 
@@ -362,7 +363,7 @@ public final class PreviewCache
             Vec3d center = renderer.getCenter();
             renderer.draw(renderWidth, renderHeight, fov, yRot, xRot, renderer.getDefaultDistance(fov, (double) renderWidth / renderHeight),
                           center.x, center.y, center.z, tileEntities, false);
-            snapshot.set(fov, yRot, xRot, tileEntities);
+            snapshot.set(fov, yRot, xRot, tileEntities, background);
 
             // Only keep the geometry while a side panel / fullscreen preview of the same path shares it.
             Integer largeFrame = LARGE_USE.get(file);
@@ -393,6 +394,7 @@ public final class PreviewCache
         private float yRot;
         private float xRot;
         private boolean tileEntities;
+        private int background;
         private boolean valid;
 
         private Snapshot(Framebuffer fbo)
@@ -400,8 +402,9 @@ public final class PreviewCache
             this.fbo = fbo;
         }
 
-        private void set(double fov, float yRot, float xRot, boolean tileEntities)
+        private void set(double fov, float yRot, float xRot, boolean tileEntities, int background)
         {
+            this.background = background;
             this.fov = fov;
             this.yRot = yRot;
             this.xRot = xRot;
@@ -409,10 +412,10 @@ public final class PreviewCache
             this.valid = true;
         }
 
-        private boolean matches(int width, int height, double fov, float yRot, float xRot, boolean tileEntities)
+        private boolean matches(int width, int height, double fov, float yRot, float xRot, boolean tileEntities, int background)
         {
             return this.valid && this.fbo.framebufferWidth == width && this.fbo.framebufferHeight == height &&
-                   this.fov == fov && this.yRot == yRot && this.xRot == xRot && this.tileEntities == tileEntities;
+                   this.fov == fov && this.yRot == yRot && this.xRot == xRot && this.tileEntities == tileEntities && this.background == background;
         }
 
         private void close()

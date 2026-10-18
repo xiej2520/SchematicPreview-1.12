@@ -29,6 +29,9 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 
+import malilib.util.data.Color4f;
+
+import dev.froyln.schematicpreview.config.Configs;
 import litematica.schematic.Schematic;
 
 /**
@@ -222,7 +225,9 @@ public class PreviewRenderer
         // Opaque clear: the FBO is blitted with blending on, alpha 0 would let the world behind
         // the GUI show through. Only captureImage() wants the transparent clear.
         GlStateManager.viewport(0, 0, width, height);
-        GlStateManager.clearColor(transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 0.05f, transparentBackground ? 0f : 1f);
+        Color4f background = Configs.Preview.PREVIEW_BACKGROUND_COLOR.getColor();
+        GlStateManager.clearColor(transparentBackground ? 0f : background.r, transparentBackground ? 0f : background.g,
+                                  transparentBackground ? 0f : background.b, transparentBackground ? 0f : background.a);
         GlStateManager.clear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 
         // A tall, narrow side panel can require a camera distance greater than the old fixed
