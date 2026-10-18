@@ -34,6 +34,7 @@ public class PreviewWidget extends InteractableWidget
 {
     private static final int BUTTON_SIZE = 14;
     private static final double MIN_DISTANCE = 1.5;
+    private static final float AUTO_ROTATE_DEGREES_PER_SECOND = 20f;
 
     private final Path path;
     @Nullable private Framebuffer fbo;
@@ -51,6 +52,10 @@ public class PreviewWidget extends InteractableWidget
     @Nullable private Consumer<BufferedImage> pendingCapture;
 
     private boolean freecam;
+    private boolean autoRotate;
+    private long lastRotateNanos;
+    // Per-widget override of the renderTileEntities config; null follows the config.
+    @Nullable private Boolean tileEntitiesOverride;
     private boolean dragging;
     private int dragButton;
     private int dragStartMouseX;
@@ -71,6 +76,41 @@ public class PreviewWidget extends InteractableWidget
         this.canReceiveMouseMoves = true;
         this.canReceiveMouseScrolls = true;
         this.path = path;
+    }
+
+    /** Back to the default framing for the current size and configured angles. */
+    public void resetCamera()
+    {
+        this.cameraInitialized = false;
+    }
+
+    public void toggleAutoRotate()
+    {
+        this.autoRotate = this.autoRotate == false;
+        this.lastRotateNanos = 0;
+    }
+
+    public void toggleTileEntities()
+    {
+        this.tileEntitiesOverride = this.isRenderingTileEntities() == false;
+    }
+
+    private boolean isRenderingTileEntities()
+    {
+        return this.tileEntitiesOverride != null ? this.tileEntitiesOverride : Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue();
+    }
+
+    private void updateAutoRotate()
+    {
+        long now = System.nanoTime();
+
+        if (this.autoRotate && this.dragging == false && this.lastRotateNanos != 0)
+        {
+            float seconds = Math.min(0.1f, (now - this.lastRotateNanos) / 1.0e9f);
+            this.yRot = (this.yRot + AUTO_ROTATE_DEGREES_PER_SECOND * seconds) % 360f;
+        }
+
+        this.lastRotateNanos = this.autoRotate ? now : 0;
     }
 
     private void openFullscreen()
@@ -277,6 +317,7 @@ public class PreviewWidget extends InteractableWidget
             this.cameraInitialized = true;
         }
 
+        this.updateAutoRotate();
         renderer.tick();
 
         if (renderer.hasFailed())
@@ -327,7 +368,7 @@ public class PreviewWidget extends InteractableWidget
 
         BufferedImage image = renderer.captureImage(this.fbo.framebufferWidth, this.fbo.framebufferHeight,
                                                      Configs.Preview.PREVIEW_FOV.getDoubleValue(), this.yRot, this.xRot, this.distance,
-                                                     this.targetX, this.targetY, this.targetZ, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue());
+                                                     this.targetX, this.targetY, this.targetZ, this.isRenderingTileEntities());
         callback.accept(image);
     }
 
@@ -355,7 +396,7 @@ public class PreviewWidget extends InteractableWidget
         try
         {
             renderer.draw(texWidth, texHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), this.yRot, this.xRot, this.distance,
-                          this.targetX, this.targetY, this.targetZ, Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue(), false);
+                          this.targetX, this.targetY, this.targetZ, this.isRenderingTileEntities(), false);
         }
         finally
         {

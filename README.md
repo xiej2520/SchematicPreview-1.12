@@ -37,7 +37,8 @@ re-implemented from scratch:
 - **Preview:** select a schematic in any Litematica browser. Drag = rotate, scroll = zoom,
   the two buttons in the preview's corner open **fullscreen** and toggle **freecam** (in
   freecam, drag pans instead of orbiting). Fullscreen has **Save PNG** and **Copy** buttons
-  (Wayland desktops need `wl-copy` on PATH for Copy).
+  (Wayland desktops need `wl-copy` on PATH for Copy). Fullscreen hotkeys: `R` resets the
+  camera, `Space` toggles a slow auto-rotate, `T` toggles tile entities for that screen only.
 - **Preview type:** the grid button next to the browser's path bar cycles List / List preview /
   Tile 5 / 4 / 3 columns (right-click cycles backwards). Tile and list previews are skipped for
   schematics above `previewMaxVolume` blocks (default 125 000).
