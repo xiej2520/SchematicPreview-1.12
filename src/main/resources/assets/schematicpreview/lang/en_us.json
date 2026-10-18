@@ -19,6 +19,8 @@
   "schematicpreview.config.name.previewfov": "Preview FOV",
   "schematicpreview.config.name.previewrotationy": "Preview rotation Y",
   "schematicpreview.config.name.previewrotationx": "Preview rotation X",
+  "schematicpreview.config.name.previewbackgroundcolor": "Preview background color",
+  "schematicpreview.config.name.screenshottransparentbackground": "Transparent screenshot background",
 
   "schematicpreview.config.comment.enabled": "Toggle mod enabled (takes effect when a screen is next opened)",
   "schematicpreview.config.comment.previewType": "Selected browser entry type",
@@ -33,6 +35,8 @@
   "schematicpreview.config.comment.previewFov": "3D preview FOV",
   "schematicpreview.config.comment.previewRotationY": "3D preview Y rotation",
   "schematicpreview.config.comment.previewRotationX": "3D preview X rotation",
+  "schematicpreview.config.comment.previewBackgroundColor": "Background color of the 3D previews, and of the clipboard image and opaque PNGs",
+  "schematicpreview.config.comment.screenshotTransparentBackground": "Keep the background transparent in PNGs saved with Save preview as PNG.\\nWhen disabled the image is composited over the preview background color",
 
   "schematicpreview.hotkey.name.openconfigscreen": "Open config screen",
   "schematicpreview.hotkey.comment.openconfigscreen": "Hotkey to open the SchematicPreview config screen",

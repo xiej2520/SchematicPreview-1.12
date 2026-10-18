@@ -33,6 +33,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Vec3i;
 
 import fi.dy.masa.litematica.render.schematic.WorldRendererSchematic;
+import fi.dy.masa.malilib.util.Color4f;
 import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 import dev.froyln.schematicpreview.config.Configs;
 
@@ -207,6 +208,14 @@ public class PreviewRenderer
     public void draw(int width, int height, double fov, float yRot, float xRot, double distance,
                      double targetX, double targetY, double targetZ, boolean tileEntities)
     {
+        this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ, tileEntities, false);
+    }
+
+    /** @param transparentBackground clear to a fully transparent background (for image capture) */
+    public void draw(int width, int height, double fov, float yRot, float xRot, double distance,
+                     double targetX, double targetY, double targetZ, boolean tileEntities,
+                     boolean transparentBackground)
+    {
         if (width <= 0 || height <= 0)
         {
             return;
@@ -215,7 +224,8 @@ public class PreviewRenderer
         Vec3i size = this.access.getBoxSize();
         double diagonal = Math.sqrt(size.getX() * (double) size.getX() + size.getY() * (double) size.getY() + size.getZ() * (double) size.getZ());
         RenderSystem.viewport(0, 0, width, height);
-        RenderSystem.clearColor(0.03f, 0.03f, 0.03f, 1f);
+        Color4f background = Configs.Preview.PREVIEW_BACKGROUND_COLOR.getColor();
+        RenderSystem.clearColor(background.r, background.g, background.b, transparentBackground ? 0f : 1f);
         RenderSystem.clear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT, MinecraftClient.IS_SYSTEM_MAC);
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
@@ -346,7 +356,7 @@ public class PreviewRenderer
         try
         {
             framebuffer.beginWrite(true);
-            this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ, tileEntities);
+            this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ, tileEntities, true);
 
             RenderSystem.bindTexture(framebuffer.colorAttachment);
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);

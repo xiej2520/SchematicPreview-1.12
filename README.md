@@ -64,6 +64,9 @@ second loader jar.
 - In the full-screen viewer: `R` resets the camera, `Space` toggles a slow auto-rotate (paused
   while dragging), `T` toggles block-entity rendering for that screen only (the config is not
   changed). A hint line is shown in the top bar.
+- The `previewBackgroundColor` option sets the preview background (also used for the copied image);
+  `screenshotTransparentBackground` controls whether saved PNGs keep a transparent background
+  or are composited over that colour.
 - Click the preview-type control in the browser navigation area to cycle list, list-preview, and
   tile layouts; right-click cycles backward through the option in the config UI.
 - Right-click a directory icon to edit its item id and icon position.

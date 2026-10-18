@@ -21,6 +21,8 @@ import javax.imageio.ImageIO;
 
 import net.minecraft.client.MinecraftClient;
 
+import dev.froyln.schematicpreview.config.Configs;
+
 /** Saves or copies a rendered schematic preview image. */
 public final class ScreenshotUtil
 {
@@ -36,6 +38,11 @@ public final class ScreenshotUtil
             Path directory = MinecraftClient.getInstance().runDirectory.toPath()
                     .resolve("screenshots").resolve("schematicpreview");
             Files.createDirectories(directory);
+
+            if (Configs.Preview.SCREENSHOT_TRANSPARENT_BACKGROUND.getBooleanValue() == false)
+            {
+                image = toOpaque(image);
+            }
 
             String name = schematic.getName();
             int dot = name.lastIndexOf('.');
@@ -139,7 +146,7 @@ public final class ScreenshotUtil
     {
         BufferedImage opaque = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = opaque.createGraphics();
-        graphics.setColor(new java.awt.Color(13, 13, 13));
+        graphics.setColor(new java.awt.Color(Configs.Preview.PREVIEW_BACKGROUND_COLOR.getIntegerValue() & 0xFFFFFF));
         graphics.fillRect(0, 0, opaque.getWidth(), opaque.getHeight());
         graphics.drawImage(image, 0, 0, null);
         graphics.dispose();

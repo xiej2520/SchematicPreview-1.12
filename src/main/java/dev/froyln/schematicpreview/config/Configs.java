@@ -10,6 +10,7 @@ import fi.dy.masa.malilib.config.ConfigUtils;
 import fi.dy.masa.malilib.config.IConfigHandler;
 import fi.dy.masa.malilib.config.IConfigBase;
 import fi.dy.masa.malilib.config.options.ConfigBoolean;
+import fi.dy.masa.malilib.config.options.ConfigColor;
 import fi.dy.masa.malilib.config.options.ConfigDouble;
 import fi.dy.masa.malilib.config.options.ConfigHotkey;
 import fi.dy.masa.malilib.config.options.ConfigInteger;
@@ -53,10 +54,13 @@ public class Configs implements IConfigHandler
         public static final ConfigDouble PREVIEW_FOV = new ConfigDouble("previewFov", 50.0, 30.0, 100.0, "Preview FOV");
         public static final ConfigDouble PREVIEW_ROTATION_Y = new ConfigDouble("previewRotationY", 45.0, -180.0, 180.0, "Preview Y rotation");
         public static final ConfigDouble PREVIEW_ROTATION_X = new ConfigDouble("previewRotationX", 30.0, -90.0, 90.0, "Preview X rotation");
+        public static final ConfigColor PREVIEW_BACKGROUND_COLOR = new ConfigColor("previewBackgroundColor", "#FF0D0D0D", "Preview background color");
+        public static final ConfigBoolean SCREENSHOT_TRANSPARENT_BACKGROUND = new ConfigBoolean("screenshotTransparentBackground", true, "Keep a transparent background in saved preview PNGs");
 
         public static final ImmutableList<IConfigBase> OPTIONS = ImmutableList.of(
                 PREVIEW_MAX_VOLUME, PREVIEW_MAX_BLOCKS, RENDER_TILE_ENTITIES,
-                PREVIEW_FOV, PREVIEW_ROTATION_Y, PREVIEW_ROTATION_X);
+                PREVIEW_FOV, PREVIEW_ROTATION_Y, PREVIEW_ROTATION_X,
+                PREVIEW_BACKGROUND_COLOR, SCREENSHOT_TRANSPARENT_BACKGROUND);
     }
 
     public static final ImmutableList<ConfigHotkey> HOTKEYS = ImmutableList.of(Generic.OPEN_CONFIG_SCREEN);
