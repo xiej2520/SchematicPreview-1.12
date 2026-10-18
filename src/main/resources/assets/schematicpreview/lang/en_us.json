@@ -40,6 +40,7 @@
 
   "schematicpreview.button.fullscreen": "Fullscreen",
   "schematicpreview.button.freecam": "Freecam",
+  "schematicpreview.label.fullscreen_hint": "R: reset  Space: rotate  T: tile entities",
   "schematicpreview.button.preview_type": "Change preview type",
   "schematicpreview.button.preview_type_short": "Preview",
   "schematicpreview.button.save_screenshot": "Save preview as PNG",

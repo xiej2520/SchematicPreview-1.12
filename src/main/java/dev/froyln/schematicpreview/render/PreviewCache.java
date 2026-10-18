@@ -274,6 +274,15 @@ public final class PreviewCache
                                         float yRot, float xRot, double distance,
                                         double targetX, double targetY, double targetZ)
     {
+        return renderPreview(file, x, y, width, height, yRot, xRot, distance, targetX, targetY, targetZ,
+                             Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue());
+    }
+
+    public static boolean renderPreview(File file, int x, int y, int width, int height,
+                                        float yRot, float xRot, double distance,
+                                        double targetX, double targetY, double targetZ,
+                                        boolean tileEntities)
+    {
         CompletableFuture<LitematicaSchematic> future = getSchematic(file);
 
         if (future.isDone() == false)
@@ -319,7 +328,7 @@ public final class PreviewCache
         {
             smallFramebuffer.beginWrite(true);
             renderer.draw(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(), yRot, xRot,
-                          distance, targetX, targetY, targetZ);
+                          distance, targetX, targetY, targetZ, tileEntities);
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
             PreviewRenderUtils.blitFramebuffer(smallFramebuffer, x, y, width, height,
                                                framebufferWidth, framebufferHeight);
@@ -341,6 +350,16 @@ public final class PreviewCache
     public static BufferedImage capturePreview(File file, int width, int height,
                                                float yRot, float xRot, double distance,
                                                double targetX, double targetY, double targetZ)
+    {
+        return capturePreview(file, width, height, yRot, xRot, distance, targetX, targetY, targetZ,
+                              Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue());
+    }
+
+    @Nullable
+    public static BufferedImage capturePreview(File file, int width, int height,
+                                               float yRot, float xRot, double distance,
+                                               double targetX, double targetY, double targetZ,
+                                               boolean tileEntities)
     {
         CompletableFuture<LitematicaSchematic> future = getSchematic(file);
 
@@ -364,7 +383,7 @@ public final class PreviewCache
         int framebufferHeight = Math.max(1, height * scale);
 
         return renderer.captureImage(framebufferWidth, framebufferHeight, Configs.Preview.PREVIEW_FOV.getDoubleValue(),
-                                     yRot, xRot, distance, targetX, targetY, targetZ);
+                                     yRot, xRot, distance, targetX, targetY, targetZ, tileEntities);
     }
 
     private static void ensureFramebuffer(int width, int height)

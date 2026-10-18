@@ -61,6 +61,9 @@ second loader jar.
 - Select a schematic to load its side-panel preview.
 - Drag with the left mouse button to orbit; drag with the right button to pan; scroll to zoom.
 - Double-click the side-panel preview for the full-screen viewer.
+- In the full-screen viewer: `R` resets the camera, `Space` toggles a slow auto-rotate (paused
+  while dragging), `T` toggles block-entity rendering for that screen only (the config is not
+  changed). A hint line is shown in the top bar.
 - Click the preview-type control in the browser navigation area to cycle list, list-preview, and
   tile layouts; right-click cycles backward through the option in the config UI.
 - Right-click a directory icon to edit its item id and icon position.

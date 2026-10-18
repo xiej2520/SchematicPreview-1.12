@@ -3,6 +3,8 @@ package dev.froyln.schematicpreview.gui;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
 
+import org.lwjgl.glfw.GLFW;
+
 import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.button.ButtonGeneric;
@@ -21,11 +23,15 @@ public class PreviewFullscreenScreen extends GuiBase
     private static final int TOP_MARGIN = 24;
     private static final int TOOLBAR_BUTTON_HEIGHT = 20;
     private static final int TOOLBAR_BUTTON_WIDTH = 18;
+    private static final float AUTO_ROTATE_DEGREES_PER_SECOND = 12.0f;
 
     private final File file;
     private boolean cameraInitialized;
     private boolean dragging;
     private boolean freecam;
+    private boolean autoRotate;
+    private boolean tileEntities;
+    private long lastFrameNanos;
     private int dragButton;
     private int dragX;
     private int dragY;
@@ -39,6 +45,7 @@ public class PreviewFullscreenScreen extends GuiBase
     public PreviewFullscreenScreen(File file)
     {
         this.file = file;
+        this.tileEntities = Configs.Preview.RENDER_TILE_ENTITIES.getBooleanValue();
         this.title = StringUtils.translate("schematicpreview.title.preview");
         this.useTitleHierarchy = false;
     }
@@ -87,7 +94,7 @@ public class PreviewFullscreenScreen extends GuiBase
         {
             PreviewCache.renderPreview(this.file, 4, TOP_MARGIN, this.width - 8, this.height - TOP_MARGIN - 4,
                     this.yRot, this.xRot, this.distance,
-                    this.targetX, this.targetY, this.targetZ);
+                    this.targetX, this.targetY, this.targetZ, this.tileEntities);
         }
         else
         {
@@ -104,6 +111,38 @@ public class PreviewFullscreenScreen extends GuiBase
                 this.freecam || this.isOverToolbarButton(42, mouseX, mouseY));
         int closeX = Math.max(64, this.width - 20);
         this.drawToolbarButton(closeX, PreviewIcons.CLOSE, this.isOverToolbarButton(closeX, mouseX, mouseY));
+
+        String hint = StringUtils.translate("schematicpreview.label.fullscreen_hint");
+        int hintX = closeX - this.getStringWidth(hint) - 8;
+
+        if (hintX > 70 + this.getStringWidth(this.title) + 8)
+        {
+            this.drawString(hint, hintX, 10, 0xFFA0A0A0);
+        }
+    }
+
+    @Override
+    public boolean onKeyTyped(int keyCode, int scanCode, int modifiers)
+    {
+        if (keyCode == GLFW.GLFW_KEY_R)
+        {
+            this.cameraInitialized = false;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_SPACE)
+        {
+            this.autoRotate = ! this.autoRotate;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_T)
+        {
+            this.tileEntities = ! this.tileEntities;
+            return true;
+        }
+
+        return super.onKeyTyped(keyCode, scanCode, modifiers);
     }
 
     private boolean isOverToolbarButton(int x, int mouseX, int mouseY)
@@ -121,6 +160,16 @@ public class PreviewFullscreenScreen extends GuiBase
 
     private void updateCamera(int mouseX, int mouseY)
     {
+        long now = System.nanoTime();
+        float elapsedSeconds = this.lastFrameNanos == 0L ? 0.0f :
+                Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+        this.lastFrameNanos = now;
+
+        if (this.autoRotate && this.dragging == false)
+        {
+            this.yRot += AUTO_ROTATE_DEGREES_PER_SECOND * elapsedSeconds;
+        }
+
         if (this.dragging)
         {
             int dx = mouseX - this.dragX;
@@ -229,7 +278,8 @@ public class PreviewFullscreenScreen extends GuiBase
         int width = Math.max(1, this.width - 8);
         int height = Math.max(1, this.height - TOP_MARGIN - 4);
         java.awt.image.BufferedImage image = PreviewCache.capturePreview(this.file, width, height,
-                this.yRot, this.xRot, this.distance, this.targetX, this.targetY, this.targetZ);
+                this.yRot, this.xRot, this.distance, this.targetX, this.targetY, this.targetZ,
+                this.tileEntities);
 
         if (image == null)
         {

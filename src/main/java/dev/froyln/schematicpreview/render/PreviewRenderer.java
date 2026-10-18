@@ -332,7 +332,8 @@ public class PreviewRenderer
 
     /** Captures the same camera view used by the fullscreen preview into an ARGB image. */
     public BufferedImage captureImage(int width, int height, double fov, float yRot, float xRot,
-                                      double distance, double targetX, double targetY, double targetZ)
+                                      double distance, double targetX, double targetY, double targetZ,
+                                      boolean tileEntities)
     {
         if (width <= 0 || height <= 0 || this.tessellationDone == false)
         {
@@ -345,7 +346,7 @@ public class PreviewRenderer
         try
         {
             framebuffer.beginWrite(true);
-            this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ);
+            this.draw(width, height, fov, yRot, xRot, distance, targetX, targetY, targetZ, tileEntities);
 
             RenderSystem.bindTexture(framebuffer.colorAttachment);
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
