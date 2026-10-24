@@ -39,15 +39,17 @@ public abstract class GuiMainMenuMixin extends GuiBase
 
         int width = this.getButtonWidth();
         int x = 12 + width + 20;
+        // Third row of the right column: the second row is taken by addons such as Litematica Printer.
+        int y = 30 + 44;
 
         if (this.schematicpreview$openFolderButton == null)
         {
-            this.schematicpreview$openFolderButton = new ButtonGeneric(x, 52, width, 20,
+            this.schematicpreview$openFolderButton = new ButtonGeneric(x, y, width, 20,
                     StringUtils.translate("schematicpreview.button.open_schematics_folder"));
         }
         else
         {
-            this.schematicpreview$openFolderButton.setPosition(x, 52);
+            this.schematicpreview$openFolderButton.setPosition(x, y);
             this.schematicpreview$openFolderButton.setWidth(width);
         }
 
